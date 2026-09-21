@@ -5,7 +5,8 @@ PostgreSQL · Flyway. Spec: `../docs/domain-model.md`. Working memory: `../Ordar
 
 Build steps 1–2 are in place: accounts, organizations, locations (`STORE` · `WAREHOUSE`),
 memberships and invitations, token auth, catalog CRUD (step 1); the append-only stock ledger,
-weighted-average costing, stock documents and the balance rebuild job (step 2).
+weighted-average costing, stock documents and the balance rebuild job (step 2); registers with
+PIN login, cashier shifts and the idempotent sale-completion transaction (step 3).
 
 ## Database
 
@@ -26,7 +27,7 @@ Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001
 `./mvnw test` — no Docker needed: the tests start an embedded PostgreSQL 17 and run the real
 `db/bootstrap.sql`, so they exercise the same role split as production.
 
-## API (steps 1–2)
+## API (steps 1–3)
 
 | Method | Path | Who |
 |---|---|---|
@@ -42,4 +43,9 @@ Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001
 | GET | `/stock-balances` | tenant (average cost: owner, stock manager) |
 | GET | `/stock-movements?locationId=&productId=` | owner, stock manager |
 | GET · POST | `/inventory/verification` · `/inventory/rebuild` | owner |
+| GET · POST | `/auth/register/staff` · `/auth/pin` (header `X-Register-Device`) | a bound register |
+| GET/POST | `/registers`, `/registers/{id}/revoke` | owner, account session only |
+| POST/GET | `/shifts`, `/shifts/current?locationId=`, `/shifts/{id}/close` | owner, stock manager, cashier |
+| POST | `/sales/checkout` (idempotent; `Idempotent-Replay` header) | owner, stock manager, cashier |
+| POST/PUT/GET | `/sales` (park a cart), `/sales/{id}`, `/sales/{id}/hold`, `/sales/{id}/complete`, `/sales/{id}/void` | owner, stock manager, cashier |
 | GET | `/.well-known/jwks.json`, `/actuator/health` | anyone |

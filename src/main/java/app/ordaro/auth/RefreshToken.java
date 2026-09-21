@@ -27,6 +27,10 @@ public class RefreshToken extends BaseEntity {
     @Column(name = "membership_id")
     private UUID membershipId;
 
+    /** Set for {@code REGISTER} tokens: the register the session is bound to. */
+    @Column(name = "device_id")
+    private UUID deviceId;
+
     @Column(name = "token_hash", nullable = false, length = 64)
     private String tokenHash;
 
@@ -52,10 +56,11 @@ public class RefreshToken extends BaseEntity {
     protected RefreshToken() {
     }
 
-    public RefreshToken(UUID accountId, UUID membershipId, String tokenHash, UUID familyId, RefreshTokenKind kind,
-            String deviceLabel, Instant expiresAt) {
+    public RefreshToken(UUID accountId, UUID membershipId, UUID deviceId, String tokenHash, UUID familyId,
+            RefreshTokenKind kind, String deviceLabel, Instant expiresAt) {
         this.accountId = accountId;
         this.membershipId = membershipId;
+        this.deviceId = deviceId;
         this.tokenHash = tokenHash;
         this.familyId = familyId;
         this.kind = kind;
@@ -83,6 +88,10 @@ public class RefreshToken extends BaseEntity {
 
     public UUID getMembershipId() {
         return membershipId;
+    }
+
+    public UUID getDeviceId() {
+        return deviceId;
     }
 
     public UUID getFamilyId() {

@@ -1,0 +1,44 @@
+package app.ordaro.sales;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+
+import app.ordaro.sales.SaleService.CartCommand;
+import app.ordaro.sales.SaleService.CompletionResult;
+import app.ordaro.sales.SaleService.PaymentCommand;
+import app.ordaro.sales.SaleService.SaleDetails;
+
+/**
+ * Idempotent completion (spec §9.2 step 0). {@link SaleService#checkout} claims the key on the
+ * sale row first; a concurrent duplicate blocks on the unique index until the first commits, then
+ * fails there. That failure aborts its transaction, so the original is read here, in a new one,
+ * and returned as a replay. Deliberately not transactional itself.
+ */
+@Service
+public class SaleCheckout {
+
+    private final SaleService sales;
+
+    public SaleCheckout(SaleService sales) {
+        this.sales = sales;
+    }
+
+    public CompletionResult checkout(String idempotencyKey, CartCommand cart, List<PaymentCommand> tenders) {
+        try {
+            return sales.checkout(idempotencyKey, cart, tenders);
+        } catch (DataIntegrityViolationException e) {
+            SaleDetails original = cart.locationId() == null ? null : sales.findByKey(cart.locationId(), idempotencyKey);
+            if (original == null) {
+                throw e;
+            }
+            return new CompletionResult(original, true);
+        }
+    }
+
+    public CompletionResult completeCart(UUID saleId, String idempotencyKey, List<PaymentCommand> tenders) {
+        return sales.completeCart(saleId, idempotencyKey, tenders);
+    }
+}

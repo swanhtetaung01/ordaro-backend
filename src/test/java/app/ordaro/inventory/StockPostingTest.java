@@ -27,7 +27,7 @@ import app.ordaro.support.Shops;
 import app.ordaro.support.Shops.Shop;
 
 /** Spec §5 and §9.1 through the real posting path, one transaction per document. */
-class StockPostingTest extends IntegrationTest {
+public class StockPostingTest extends IntegrationTest {
 
     /** 2026-06-01 09:30 in Yangon: a fixed business time so document years are deterministic. */
     static final Instant JUNE = Instant.parse("2026-06-01T03:00:00Z");
@@ -343,11 +343,11 @@ class StockPostingTest extends IntegrationTest {
         return balance.getQuantity().multiply(balance.getAverageCost());
     }
 
-    static DocumentCommand stockIn(UUID location, UUID product, String quantity, String unitCost) {
+    public static DocumentCommand stockIn(UUID location, UUID product, String quantity, String unitCost) {
         return stockIn(location, product, quantity, unitCost, JUNE);
     }
 
-    static DocumentCommand stockIn(UUID location, UUID product, String quantity, String unitCost, Instant at) {
+    public static DocumentCommand stockIn(UUID location, UUID product, String quantity, String unitCost, Instant at) {
         return new DocumentCommand(StockDocumentType.STOCK_IN, location, null, null, at, null, List.of(
                 new LineCommand(product, new BigDecimal(quantity), unitCost == null ? null : new BigDecimal(unitCost),
                         null)));

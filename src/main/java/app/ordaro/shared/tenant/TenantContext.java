@@ -4,6 +4,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import app.ordaro.shared.web.ApiException;
+
 /**
  * Who is acting, for the current thread. Set by the request filter from a verified access
  * token, or explicitly by code that must act for a tenant it has just created (sign-up) or
@@ -14,8 +16,16 @@ import java.util.function.Supplier;
  */
 public final class TenantContext {
 
-    /** @param organizationId null outside a tenant (login, picker, refresh). */
-    public record Current(UUID organizationId, UUID membershipId, UUID accountId) {
+    /**
+     * @param organizationId null outside a tenant (login, picker, refresh)
+     * @param locationScope  the one location this session may act at — the membership's location,
+     *                       or a register's; null means every location (an owner)
+     */
+    public record Current(UUID organizationId, UUID membershipId, UUID accountId, UUID locationScope) {
+
+        public Current(UUID organizationId, UUID membershipId, UUID accountId) {
+            this(organizationId, membershipId, accountId, null);
+        }
     }
 
     private static final ThreadLocal<Current> CURRENT = new ThreadLocal<>();
@@ -45,6 +55,14 @@ public final class TenantContext {
 
     public static UUID requireMembershipId() {
         return membershipId().orElseThrow(() -> new IllegalStateException("no membership in context"));
+    }
+
+    /** Refuses an action at a location outside this session's scope. */
+    public static void requireLocationInScope(UUID locationId) {
+        UUID scope = current().map(Current::locationScope).orElse(null);
+        if (scope != null && !scope.equals(locationId)) {
+            throw ApiException.forbidden("location_out_of_scope", "this session cannot act at that location");
+        }
     }
 
     public static <T> T call(Current current, Supplier<T> work) {

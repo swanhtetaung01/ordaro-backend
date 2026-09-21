@@ -69,6 +69,22 @@ public class Shops {
                 shop.accountId()), () -> transaction.execute(status -> work.get()));
     }
 
+    /**
+     * Sets the tenant but opens no transaction — as a controller does. Needed for code that
+     * manages its own transactions, such as idempotent checkout reading the original after a
+     * duplicate-key failure.
+     */
+    public <T> T inTenant(Shop shop, Supplier<T> work) {
+        return TenantContext.call(new TenantContext.Current(shop.organizationId(), shop.membershipId(),
+                shop.accountId()), work);
+    }
+
+    /** As {@link #as}, but for a session limited to one location (a scoped member, or a register). */
+    public <T> T asScoped(Shop shop, UUID locationScope, Supplier<T> work) {
+        return TenantContext.call(new TenantContext.Current(shop.organizationId(), shop.membershipId(),
+                shop.accountId(), locationScope), () -> transaction.execute(status -> work.get()));
+    }
+
     public void run(Shop shop, Runnable work) {
         as(shop, () -> {
             work.run();
