@@ -46,11 +46,12 @@ class RoleSplitTest extends IntegrationTest {
     }
 
     @Test
-    void defaultPrivilegesLetTheAppUseEveryV1Table() throws SQLException {
+    void defaultPrivilegesLetTheAppReadEveryTable() throws SQLException {
         try (Connection app = TestDatabase.connectAsApp(); Statement s = app.createStatement()) {
             for (String table : List.of("organization", "account", "location", "membership", "refresh_token",
                     "phone_verification", "category", "supplier", "product", "product_barcode",
-                    "location_product")) {
+                    "location_product", "document_sequence", "stock_document", "stock_document_line",
+                    "stock_balance", "stock_movement")) {
                 s.executeQuery("select count(*) from " + table).close();
             }
         }

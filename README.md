@@ -3,8 +3,9 @@
 Multi-tenant POS and inventory API for Ordaro. Spring Boot 4.1 · Java 25 · Hibernate ORM 7.4 ·
 PostgreSQL · Flyway. Spec: `../docs/domain-model.md`. Working memory: `../Ordaro-Vault/`.
 
-Build step 1 (org + catalog + identity) is in place: accounts, organizations, locations
-(`STORE` · `WAREHOUSE`), memberships and invitations, token auth, and plain catalog CRUD.
+Build steps 1–2 are in place: accounts, organizations, locations (`STORE` · `WAREHOUSE`),
+memberships and invitations, token auth, catalog CRUD (step 1); the append-only stock ledger,
+weighted-average costing, stock documents and the balance rebuild job (step 2).
 
 ## Database
 
@@ -25,7 +26,7 @@ Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001
 `./mvnw test` — no Docker needed: the tests start an embedded PostgreSQL 17 and run the real
 `db/bootstrap.sql`, so they exercise the same role split as production.
 
-## API (step 1)
+## API (steps 1–2)
 
 | Method | Path | Who |
 |---|---|---|
@@ -37,4 +38,8 @@ Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001
 | GET/POST/PATCH | `/memberships` | owner |
 | GET/POST/PATCH | `/categories`, `/suppliers` | tenant (writes: owner, stock manager) |
 | GET/POST/PATCH/DELETE | `/products`, `/products/{id}/barcodes`, `/products/{id}/locations/{locationId}` | tenant (writes: owner, stock manager) |
+| GET/POST/PUT | `/stock-documents`, `/stock-documents/{id}/post`, `/stock-documents/{id}/void` | owner, stock manager |
+| GET | `/stock-balances` | tenant (average cost: owner, stock manager) |
+| GET | `/stock-movements?locationId=&productId=` | owner, stock manager |
+| GET · POST | `/inventory/verification` · `/inventory/rebuild` | owner |
 | GET | `/.well-known/jwks.json`, `/actuator/health` | anyone |

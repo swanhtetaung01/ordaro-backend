@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import app.ordaro.catalog.ProductService.ProductCommand;
+import app.ordaro.inventory.StockDocumentService.OpeningStock;
 
 @RestController
 @RequestMapping("/products")
@@ -35,18 +37,22 @@ class ProductController {
             boolean active, List<String> barcodes) {
     }
 
-    /** Create and update share one shape; on update every field is optional. */
+    record OpeningStockWrite(@NotNull UUID locationId, @NotNull BigDecimal quantity, BigDecimal unitCost) {
+    }
+
+    /** Create and update share one shape; on update every field is optional. Opening stock is create-only. */
     record ProductWrite(UUID id, @Size(max = 64) String sku, @Size(max = 200) String name, UUID categoryId,
             UUID defaultSupplierId, ProductUnit unit, @Size(max = 32) String sizeLabel,
             @Size(max = 64) String productGroupKey, @DecimalMin("0") BigDecimal retailPrice,
             @DecimalMin("0") BigDecimal wholesalePrice, Boolean taxable, Boolean trackInventory,
             @Min(0) Integer reorderPoint, Boolean sellInPos, Boolean sellOnline, Boolean active,
-            List<String> barcodes) {
+            List<String> barcodes, List<@Valid OpeningStockWrite> openingStock) {
 
         ProductCommand command() {
             return new ProductCommand(id, sku, name, categoryId, defaultSupplierId, unit, sizeLabel, productGroupKey,
                     retailPrice, wholesalePrice, taxable, trackInventory, reorderPoint, sellInPos, sellOnline, active,
-                    barcodes);
+                    barcodes, openingStock == null ? null : openingStock.stream()
+                            .map(o -> new OpeningStock(o.locationId(), o.quantity(), o.unitCost())).toList());
         }
     }
 
