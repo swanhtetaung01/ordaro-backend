@@ -30,15 +30,23 @@ public class SaleCheckout {
         try {
             return sales.checkout(idempotencyKey, cart, tenders);
         } catch (DataIntegrityViolationException e) {
-            SaleDetails original = cart.locationId() == null ? null : sales.findByKey(cart.locationId(), idempotencyKey);
-            if (original == null) {
-                throw e;
-            }
-            return new CompletionResult(original, true);
+            return replayOrRethrow(cart.locationId(), idempotencyKey, e);
         }
     }
 
     public CompletionResult completeCart(UUID saleId, String idempotencyKey, List<PaymentCommand> tenders) {
-        return sales.completeCart(saleId, idempotencyKey, tenders);
+        try {
+            return sales.completeCart(saleId, idempotencyKey, tenders);
+        } catch (DataIntegrityViolationException e) {
+            return replayOrRethrow(sales.locationOf(saleId), idempotencyKey, e);
+        }
+    }
+
+    private CompletionResult replayOrRethrow(UUID locationId, String idempotencyKey, DataIntegrityViolationException e) {
+        SaleDetails original = locationId == null ? null : sales.findByKey(locationId, idempotencyKey);
+        if (original == null) {
+            throw e;
+        }
+        return new CompletionResult(original, true);
     }
 }

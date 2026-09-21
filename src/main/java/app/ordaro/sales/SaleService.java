@@ -250,6 +250,10 @@ public class SaleService {
         return details(sale);
     }
 
+    public UUID locationOf(UUID saleId) {
+        return sales.findById(saleId).map(Sale::getLocationId).orElse(null);
+    }
+
     public SaleDetails findByKey(UUID locationId, String idempotencyKey) {
         return sales.findByLocationIdAndIdempotencyKey(locationId, idempotencyKey).map(this::details).orElse(null);
     }
