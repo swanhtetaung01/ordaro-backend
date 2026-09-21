@@ -27,6 +27,18 @@ Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001
 `./mvnw test` — no Docker needed: the tests start an embedded PostgreSQL 17 and run the real
 `db/bootstrap.sql`, so they exercise the same role split as production.
 
+## Vertical slice (step 4)
+
+`scripts/vertical-slice.sh` drives a running app with curl: sign-up, login → token → request,
+create product → stock in → sell → retry the same completion → the balance drops once and one
+receipt exists; a wrong-tenant request; a PIN register session; shift close; refresh rotation.
+It needs only curl and python. Run the app against any PostgreSQL that `db/bootstrap.sql` has
+been applied to, then:
+
+```
+BASE=http://localhost:8080 scripts/vertical-slice.sh
+```
+
 ## API (steps 1–3)
 
 | Method | Path | Who |
