@@ -28,26 +28,34 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    /** Authority for a tenant session (a USER access token with a verified membership). */
-    public static final String TENANT_SESSION = "KIND_USER";
+    /** Authority for any tenant session: a USER or REGISTER token naming a verified membership. */
+    public static final String TENANT_SESSION = "TENANT";
+
+    /** An account session (phone + password). */
+    public static final String USER_SESSION = "KIND_USER";
+
+    /** A PIN session on a bound register, scoped to its store. */
+    public static final String REGISTER_SESSION = "KIND_REGISTER";
 
     /** Authority for a picker session: an account with no tenant chosen yet. */
     public static final String PICKER_SESSION = "KIND_PICKER";
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http, JwtDecoder jwtDecoder, MembershipCheck membershipCheck)
-            throws Exception {
+    SecurityFilterChain api(HttpSecurity http, JwtDecoder jwtDecoder, MembershipCheck membershipCheck,
+            DeviceCheck deviceCheck) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login", "/auth/refresh",
-                                "/auth/logout").permitAll()
+                                "/auth/logout", "/auth/pin").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/register/staff").permitAll()
                         .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json", "/actuator/health").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers("/auth/**").hasAnyAuthority(TENANT_SESSION, PICKER_SESSION)
+                        .requestMatchers("/auth/**").hasAnyAuthority(USER_SESSION, PICKER_SESSION)
                         .anyRequest().hasAuthority(TENANT_SESSION))
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)))
-                .addFilterAfter(new TenantMembershipFilter(membershipCheck), BearerTokenAuthenticationFilter.class);
+                .addFilterAfter(new TenantMembershipFilter(membershipCheck, deviceCheck),
+                        BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

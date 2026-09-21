@@ -1,6 +1,7 @@
 package app.ordaro.auth;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,9 +36,11 @@ import app.ordaro.shared.tenant.TenantContext;
 final class TenantMembershipFilter extends OncePerRequestFilter {
 
     private final MembershipCheck membershipCheck;
+    private final DeviceCheck deviceCheck;
 
-    TenantMembershipFilter(MembershipCheck membershipCheck) {
+    TenantMembershipFilter(MembershipCheck membershipCheck, DeviceCheck deviceCheck) {
         this.membershipCheck = membershipCheck;
+        this.deviceCheck = deviceCheck;
     }
 
     @Override
@@ -54,7 +57,7 @@ final class TenantMembershipFilter extends OncePerRequestFilter {
 
         TenantContext.Current current;
         List<GrantedAuthority> authorities;
-        if (RefreshTokenKind.USER.name().equals(kind)) {
+        if (RefreshTokenKind.USER.name().equals(kind) || RefreshTokenKind.REGISTER.name().equals(kind)) {
             UUID organizationId = uuid(jwt.getClaimAsString(TokenService.ORG));
             UUID membershipId = uuid(jwt.getClaimAsString(TokenService.MEM));
             Optional<MembershipSnapshot> membership = membershipId == null
@@ -66,8 +69,26 @@ final class TenantMembershipFilter extends OncePerRequestFilter {
                 reject(response);
                 return;
             }
-            current = new TenantContext.Current(organizationId, membershipId, accountId);
+            UUID scope = membership.get().locationId();
+            String sessionKind = SecurityConfig.USER_SESSION;
+            if (RefreshTokenKind.REGISTER.name().equals(kind)) {
+                // a PIN session: the register must still be active, in this organization, at the token's store
+                UUID deviceId = uuid(jwt.getClaimAsString(TokenService.DEV));
+                UUID location = uuid(jwt.getClaimAsString(TokenService.LOC));
+                Optional<DeviceCheck.DeviceSnapshot> device = deviceId == null ? Optional.empty()
+                        : deviceCheck.find(deviceId);
+                if (device.isEmpty() || !device.get().usable(Instant.now())
+                        || !organizationId.equals(device.get().organizationId())
+                        || !device.get().locationId().equals(location)) {
+                    reject(response);
+                    return;
+                }
+                scope = location;
+                sessionKind = SecurityConfig.REGISTER_SESSION;
+            }
+            current = new TenantContext.Current(organizationId, membershipId, accountId, scope);
             authorities = List.of(new SimpleGrantedAuthority(SecurityConfig.TENANT_SESSION),
+                    new SimpleGrantedAuthority(sessionKind),
                     new SimpleGrantedAuthority("ROLE_" + membership.get().role().name()));
         } else if (RefreshTokenKind.PICKER.name().equals(kind) && accountId != null) {
             current = new TenantContext.Current(null, null, accountId);

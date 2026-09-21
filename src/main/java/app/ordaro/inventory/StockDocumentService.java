@@ -246,6 +246,7 @@ public class StockDocumentService {
             throw ApiException.badRequest("validation_failed", "type is required");
         }
         requireActiveLocation(command.locationId());
+        TenantContext.requireLocationInScope(command.locationId());
         if (type == StockDocumentType.TRANSFER) {
             if (command.counterpartyLocationId() == null) {
                 throw ApiException.badRequest("destination_required", "a transfer names its destination location");

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,10 +45,31 @@ class AuthController {
     record AcceptCodeRequest(@NotBlank @Size(max = 16) String code) {
     }
 
-    private final AuthService auth;
+    record PinLoginRequest(@NotNull UUID membershipId, @NotBlank @Size(max = 6) String pin) {
+    }
 
-    AuthController(AuthService auth) {
+    /** The register's device credential travels in this header, never in a URL. */
+    static final String DEVICE_HEADER = "X-Register-Device";
+
+    private final AuthService auth;
+    private final PinLoginService pinLogin;
+
+    AuthController(AuthService auth, PinLoginService pinLogin) {
         this.auth = auth;
+        this.pinLogin = pinLogin;
+    }
+
+    /** The register's login screen: who may log in here. */
+    @GetMapping("/register/staff")
+    List<PinLoginService.StaffEntry> registerStaff(@RequestHeader(value = DEVICE_HEADER, required = false) String device) {
+        return pinLogin.staff(device);
+    }
+
+    /** Name + 6-digit PIN on a bound register: a REGISTER session scoped to its store. */
+    @PostMapping("/pin")
+    IssuedTokens pinLogin(@RequestHeader(value = DEVICE_HEADER, required = false) String device,
+            @Valid @RequestBody PinLoginRequest request) {
+        return pinLogin.login(device, request.membershipId(), request.pin());
     }
 
     @PostMapping("/signup")

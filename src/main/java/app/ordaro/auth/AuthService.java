@@ -54,6 +54,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokens;
     private final MembershipDirectory directory;
     private final MembershipCheck membershipCheck;
+    private final DeviceCheck deviceCheck;
     private final TokenService tokens;
     private final PasswordEncoder passwords;
     private final TransactionTemplate transaction;
@@ -62,7 +63,8 @@ public class AuthService {
 
     public AuthService(AccountRepository accounts, OrganizationRepository organizations,
             LocationRepository locations, MembershipRepository memberships, RefreshTokenRepository refreshTokens,
-            MembershipDirectory directory, MembershipCheck membershipCheck, TokenService tokens,
+            MembershipDirectory directory, MembershipCheck membershipCheck, DeviceCheck deviceCheck,
+            TokenService tokens,
             PasswordEncoder passwords, PlatformTransactionManager transactionManager, Clock clock) {
         this.accounts = accounts;
         this.organizations = organizations;
@@ -71,6 +73,7 @@ public class AuthService {
         this.refreshTokens = refreshTokens;
         this.directory = directory;
         this.membershipCheck = membershipCheck;
+        this.deviceCheck = deviceCheck;
         this.tokens = tokens;
         this.passwords = passwords;
         this.transaction = new TransactionTemplate(transactionManager);
@@ -156,6 +159,9 @@ public class AuthService {
         }
         token.markUsed(now);
 
+        if (token.getKind() == RefreshTokenKind.REGISTER) {
+            return refreshRegister(token, now);
+        }
         Account account = accounts.findById(token.getAccountId()).filter(Account::canLogIn).orElse(null);
         if (account == null) {
             refreshTokens.revokeFamily(token.getFamilyId(), now);
@@ -172,6 +178,22 @@ public class AuthService {
             throw ApiException.unauthorized("membership_inactive", "the membership is no longer active");
         }
         return tokens.forMembership(account.getId(), membership, token.getFamilyId(), token.getDeviceLabel());
+    }
+
+    /** A register session refreshes while its device, its membership and any linked account still work. */
+    private IssuedTokens refreshRegister(RefreshToken token, Instant now) {
+        DeviceCheck.DeviceSnapshot device = deviceCheck.lockByIdForRefresh(token.getDeviceId())
+                .filter(d -> d.usable(now)).orElse(null);
+        MembershipSnapshot membership = directory.find(token.getMembershipId())
+                .filter(MembershipSnapshot::isActive).orElse(null);
+        boolean accountOk = token.getAccountId() == null
+                || accounts.findById(token.getAccountId()).filter(Account::canLogIn).isPresent();
+        if (device == null || membership == null || !accountOk
+                || !membership.organizationId().equals(device.organizationId())) {
+            refreshTokens.revokeFamily(token.getFamilyId(), now);
+            throw ApiException.unauthorized("register_session_ended", "the register or membership is no longer active");
+        }
+        return tokens.forRegister(membership, device, token.getFamilyId());
     }
 
     @Transactional
