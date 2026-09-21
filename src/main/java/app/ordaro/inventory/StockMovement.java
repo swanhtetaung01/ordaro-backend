@@ -18,7 +18,8 @@ import app.ordaro.shared.persistence.TenantEntity;
 /**
  * One row of the append-only stock ledger (spec §5). Never updated, never deleted — the
  * database refuses both — so a mistake is corrected by posting another row. Ledger order is
- * {@code (createdAt, id)}; {@code movedAt} is business time, for display and reporting only.
+ * {@link #getSeq() seq}, per (location, product); {@code createdAt} is informational and
+ * {@code movedAt} is business time, for display and reporting only.
  */
 @Entity
 @Immutable
@@ -30,6 +31,10 @@ public class StockMovement extends TenantEntity {
 
     @Column(name = "product_id", nullable = false, updatable = false)
     private UUID productId;
+
+    /** Position in this (location, product)'s ledger: 1, 2, 3 … assigned under the balance row lock. */
+    @Column(name = "seq", nullable = false, updatable = false)
+    private long seq;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 32, updatable = false)
@@ -75,11 +80,12 @@ public class StockMovement extends TenantEntity {
     protected StockMovement() {
     }
 
-    StockMovement(UUID locationId, UUID productId, StockMovementType type, BigDecimal quantity, BigDecimal unitCost,
-            BigDecimal balanceAfter, StockReferenceType referenceType, UUID referenceId, String referenceNumber,
+    StockMovement(UUID locationId, UUID productId, long seq, StockMovementType type, BigDecimal quantity,
+            BigDecimal unitCost, BigDecimal balanceAfter, StockReferenceType referenceType, UUID referenceId, String referenceNumber,
             StockMovementReason reason, Instant movedAt) {
         this.locationId = locationId;
         this.productId = productId;
+        this.seq = seq;
         this.type = type;
         this.quantity = quantity;
         this.unitCost = unitCost;
@@ -97,6 +103,10 @@ public class StockMovement extends TenantEntity {
 
     public UUID getProductId() {
         return productId;
+    }
+
+    public long getSeq() {
+        return seq;
     }
 
     public StockMovementType getType() {

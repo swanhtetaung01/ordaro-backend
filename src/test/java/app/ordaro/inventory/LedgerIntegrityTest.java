@@ -154,6 +154,55 @@ class LedgerIntegrityTest extends IntegrationTest {
         assertThat(report.movementsReplayed()).isGreaterThan(150);
     }
 
+    /**
+     * Ledger order is {@code seq}, not the clock. A second app instance with a slow clock can write
+     * a later movement with an earlier {@code created_at}; the replay must not care.
+     */
+    @Test
+    void theLedgerIsOrderedBySeqEvenWhenCreatedAtIsOutOfOrder() throws SQLException {
+        UUID oil = shops.product(shop, "Oil");
+        shops.run(shop, () -> documents.createAndPost(stockIn(main, oil, "10", "1000")));
+        shops.run(shop, () -> documents.createAndPost(stockOut(main, oil, "5", StockMovementReason.DAMAGED)));
+        shops.run(shop, () -> documents.createAndPost(stockIn(main, oil, "10", "2000")));
+
+        try (Connection owner = TestDatabase.connectAsOwner(); Statement s = owner.createStatement()) {
+            s.execute("alter table stock_movement disable trigger stock_movement_no_update_or_delete");
+            try (PreparedStatement skew = owner.prepareStatement("""
+                    update stock_movement set created_at = created_at - interval '1 hour'
+                    where product_id = ? and seq = 3""")) {
+                skew.setObject(1, oil);
+                assertThat(skew.executeUpdate()).isEqualTo(1);
+            } finally {
+                s.execute("alter table stock_movement enable trigger stock_movement_no_update_or_delete");
+            }
+            // the clock now puts the third posting first
+            try (PreparedStatement byClock = owner.prepareStatement(
+                    "select seq from stock_movement where product_id = ? order by created_at, id")) {
+                byClock.setObject(1, oil);
+                List<Long> order = new ArrayList<>();
+                try (ResultSet rs = byClock.executeQuery()) {
+                    while (rs.next()) {
+                        order.add(rs.getLong(1));
+                    }
+                }
+                assertThat(order).containsExactly(3L, 1L, 2L);
+            }
+        }
+
+        // by seq: 10 @ 1000, −5, +10 @ 2000 → (5 × 1000 + 10 × 2000) / 15
+        StockBalanceRebuilder.Replayed replayed = shops.as(shop, () -> rebuilder.replay(main, oil));
+        assertThat(replayed.quantity()).isEqualByComparingTo("15");
+        assertThat(replayed.averageCost()).isEqualByComparingTo("1666.6667");
+        assertThat(replayed.balanceAfterErrors()).isZero();
+        assertThat(replayed.sequenceErrors()).isZero();
+        assertThat(shops.as(shop, () -> rebuilder.verify()).clean()).isTrue();
+
+        // …whereas replaying by the clock would have blended before the outflow: 1500, a different answer
+        BigDecimal byClock = WeightedAverage.afterInflow(new BigDecimal("10"), new BigDecimal("1000"),
+                new BigDecimal("10"), new BigDecimal("2000"));
+        assertThat(byClock).isNotEqualByComparingTo(replayed.averageCost());
+    }
+
     @Test
     void theRebuildJobFindsDriftAndRepairsIt() throws SQLException {
         UUID oil = shops.product(shop, "Oil");

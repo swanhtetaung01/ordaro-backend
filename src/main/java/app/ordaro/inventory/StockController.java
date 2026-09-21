@@ -25,13 +25,13 @@ class StockController {
             Instant lastMovementAt) {
     }
 
-    record MovementView(UUID id, Instant createdAt, Instant movedAt, StockMovementType type, BigDecimal quantity,
-            BigDecimal unitCost, BigDecimal balanceAfter, StockReferenceType referenceType, UUID referenceId,
+    record MovementView(UUID id, long seq, Instant createdAt, Instant movedAt, StockMovementType type,
+            BigDecimal quantity, BigDecimal unitCost, BigDecimal balanceAfter, StockReferenceType referenceType, UUID referenceId,
             String referenceNumber, StockMovementReason reason, UUID createdBy) {
 
         static MovementView of(StockMovement m) {
-            return new MovementView(m.getId(), m.getCreatedAt(), m.getMovedAt(), m.getType(), m.getQuantity(),
-                    m.getUnitCost(), m.getBalanceAfter(), m.getReferenceType(), m.getReferenceId(),
+            return new MovementView(m.getId(), m.getSeq(), m.getCreatedAt(), m.getMovedAt(), m.getType(),
+                    m.getQuantity(), m.getUnitCost(), m.getBalanceAfter(), m.getReferenceType(), m.getReferenceId(),
                     m.getReferenceNumber(), m.getReason(), m.getCreatedBy());
         }
     }

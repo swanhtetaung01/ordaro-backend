@@ -33,7 +33,8 @@ import app.ordaro.shared.web.ApiException;
  * <li>locks every balance involved, ordered by product then location;</li>
  * <li>applies each entry in order — §9.1 on inflows, the average carried through outflows —
  * refusing an outflow that would go below zero unless the organization allows it;</li>
- * <li>appends one movement per entry with its {@code balanceAfter}.</li>
+ * <li>appends one movement per entry with its {@code seq} (from the locked balance, so ledger
+ * order is posting order whatever any clock says) and {@code balanceAfter}.</li>
  * </ol>
  * Callers must not load {@link StockBalance} rows earlier in the same transaction: the lock
  * query would hand back the already-loaded, possibly stale, instance.
@@ -127,7 +128,8 @@ public class StockLedger {
                 throw new IllegalArgumentException("a movement has a non-zero quantity");
             }
             balance.touch(entry.movedAt());
-            posted.add(movements.save(new StockMovement(entry.locationId(), entry.productId(), entry.type(),
+            posted.add(movements.save(new StockMovement(entry.locationId(), entry.productId(), balance.nextSeq(),
+                    entry.type(),
                     quantity, unitCost, balance.getQuantity(), entry.referenceType(), entry.referenceId(),
                     entry.referenceNumber(), entry.reason(), entry.movedAt())));
         }

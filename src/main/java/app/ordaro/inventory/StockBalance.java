@@ -32,6 +32,10 @@ public class StockBalance extends TenantEntity {
     @Column(name = "average_cost", nullable = false, precision = 19, scale = 4)
     private BigDecimal averageCost;
 
+    /** The {@code seq} of this key's latest movement; the next posting takes {@code lastSeq + 1}. */
+    @Column(name = "last_seq", nullable = false)
+    private long lastSeq;
+
     /** Drives the dead-stock report. The latest business time seen, never moved backwards. */
     @Column(name = "last_movement_at")
     private Instant lastMovementAt;
@@ -47,6 +51,11 @@ public class StockBalance extends TenantEntity {
     /** Outflows never change the average (spec §9.1). */
     void applyOutflow(BigDecimal signedQuantity) {
         quantity = quantity.add(signedQuantity);
+    }
+
+    /** Only under the row lock: the next ledger position for this (location, product). */
+    long nextSeq() {
+        return ++lastSeq;
     }
 
     void touch(Instant movedAt) {
@@ -75,6 +84,10 @@ public class StockBalance extends TenantEntity {
 
     public BigDecimal getAverageCost() {
         return averageCost;
+    }
+
+    public long getLastSeq() {
+        return lastSeq;
     }
 
     public Instant getLastMovementAt() {

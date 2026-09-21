@@ -115,6 +115,8 @@ class StockPostingTest extends IntegrationTest {
                 .containsExactly("10", "5", "-3");
         assertThat(ledger).extracting(m -> m.getBalanceAfter().stripTrailingZeros().toPlainString())
                 .containsExactly("10", "15", "12");
+        assertThat(ledger).extracting(StockMovement::getSeq).containsExactly(1L, 2L, 3L);
+        assertThat(balance(main, oil).getLastSeq()).isEqualTo(3L);
         // the outflow consumed the average, not either purchase price
         assertThat(ledger.get(2).getUnitCost()).isEqualByComparingTo("1100");
         assertThat(ledger.get(2).getReason()).isEqualTo(StockMovementReason.DAMAGED);
@@ -187,8 +189,13 @@ class StockPostingTest extends IntegrationTest {
         List<StockMovement> legs = shops.as(shop,
                 () -> movements.findByReference(StockReferenceType.STOCK_DOCUMENT, transfer.document().getId()));
         assertThat(legs).extracting(StockMovement::getType)
-                .containsExactly(StockMovementType.TRANSFER_OUT, StockMovementType.TRANSFER_IN);
-        assertThat(legs.get(1).getUnitCost()).isEqualByComparingTo("1000");
+                .containsExactlyInAnyOrder(StockMovementType.TRANSFER_OUT, StockMovementType.TRANSFER_IN);
+        StockMovement in = legs.stream().filter(m -> m.getType() == StockMovementType.TRANSFER_IN).findFirst()
+                .orElseThrow();
+        assertThat(in.getLocationId()).isEqualTo(warehouse);
+        assertThat(in.getUnitCost()).isEqualByComparingTo("1000");
+        // each (location, product) has its own sequence: both legs are the 2nd movement at their location
+        assertThat(legs).extracting(StockMovement::getSeq).containsOnly(2L);
     }
 
     @Test
