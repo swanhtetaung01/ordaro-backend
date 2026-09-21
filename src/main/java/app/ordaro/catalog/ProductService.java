@@ -10,6 +10,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import app.ordaro.inventory.StockDocumentService;
+import app.ordaro.inventory.StockDocumentService.OpeningStock;
 import app.ordaro.org.LocationRepository;
 import app.ordaro.shared.web.ApiException;
 
@@ -19,7 +21,8 @@ public class ProductService {
     public record ProductCommand(UUID id, String sku, String name, UUID categoryId, UUID defaultSupplierId,
             ProductUnit unit, String sizeLabel, String productGroupKey, BigDecimal retailPrice,
             BigDecimal wholesalePrice, Boolean taxable, Boolean trackInventory, Integer reorderPoint,
-            Boolean sellInPos, Boolean sellOnline, Boolean active, List<String> barcodes) {
+            Boolean sellInPos, Boolean sellOnline, Boolean active, List<String> barcodes,
+            List<OpeningStock> openingStock) {
     }
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -31,17 +34,19 @@ public class ProductService {
     private final SupplierRepository suppliers;
     private final LocationRepository locations;
     private final LocationProductRepository locationProducts;
+    private final StockDocumentService stockDocuments;
     private final Clock clock;
 
     public ProductService(ProductRepository products, ProductBarcodeRepository barcodes,
             CategoryRepository categories, SupplierRepository suppliers, LocationRepository locations,
-            LocationProductRepository locationProducts, Clock clock) {
+            LocationProductRepository locationProducts, StockDocumentService stockDocuments, Clock clock) {
         this.products = products;
         this.barcodes = barcodes;
         this.categories = categories;
         this.suppliers = suppliers;
         this.locations = locations;
         this.locationProducts = locationProducts;
+        this.stockDocuments = stockDocuments;
         this.clock = clock;
     }
 
@@ -71,6 +76,10 @@ public class ProductService {
             for (String code : command.barcodes()) {
                 addBarcode(product.getId(), code);
             }
+        }
+        if (command.openingStock() != null && !command.openingStock().isEmpty()) {
+            // the Add Product form's opening stock by location: one auto-posted OPENING per location
+            stockDocuments.postOpeningStock(product.getId(), command.openingStock());
         }
         return product;
     }

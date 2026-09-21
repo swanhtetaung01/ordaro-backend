@@ -2,6 +2,7 @@ package app.ordaro.dev;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,7 @@ import app.ordaro.catalog.CategoryRepository;
 import app.ordaro.catalog.ProductService;
 import app.ordaro.catalog.ProductService.ProductCommand;
 import app.ordaro.catalog.ProductUnit;
+import app.ordaro.inventory.StockDocumentService.OpeningStock;
 import app.ordaro.org.Account;
 import app.ordaro.org.AccountRepository;
 import app.ordaro.org.Location;
@@ -78,18 +80,24 @@ class DevSeed implements ApplicationRunner {
         TenantContext.run(new TenantContext.Current(owner.organizationId(), owner.membershipId(), account.getId()),
                 () -> transaction.executeWithoutResult(status -> {
                     locations.save(new Location("WH", "Yangon Warehouse", LocationType.WAREHOUSE));
+                    UUID main = locations.findAllByOrderByCodeAsc().stream()
+                            .filter(l -> l.getCode().equals("MAIN")).findFirst().orElseThrow().getId();
                     Category oils = categories.save(new Category("Cooking Oil", null));
                     Category rice = categories.save(new Category("Rice", null));
-                    product("Cooking Oil 1L", oils, ProductUnit.PIECE, "1L", "cooking-oil", "4500", "8834000000011");
-                    product("Cooking Oil 2L", oils, ProductUnit.PIECE, "2L", "cooking-oil", "8600", "8834000000028");
-                    product("Paw San Rice 5kg", rice, ProductUnit.BAG, "5kg", null, "21000", "8834000000035");
+                    product("Cooking Oil 1L", oils, ProductUnit.PIECE, "1L", "cooking-oil", "4500", "8834000000011",
+                            main, "24", "3600");
+                    product("Cooking Oil 2L", oils, ProductUnit.PIECE, "2L", "cooking-oil", "8600", "8834000000028",
+                            main, "12", "7000");
+                    product("Paw San Rice 5kg", rice, ProductUnit.BAG, "5kg", null, "21000", "8834000000035",
+                            main, "10", "17500");
                 }));
         log.info("seed: created demo shop for {}", phone);
     }
 
     private void product(String name, Category category, ProductUnit unit, String size, String group, String price,
-            String barcode) {
+            String barcode, UUID location, String openingQuantity, String openingCost) {
         products.create(new ProductCommand(null, null, name, category.getId(), null, unit, size, group,
-                new BigDecimal(price), null, null, null, 5, null, null, null, List.of(barcode)));
+                new BigDecimal(price), null, null, null, 5, null, null, null, List.of(barcode),
+                List.of(new OpeningStock(location, new BigDecimal(openingQuantity), new BigDecimal(openingCost)))));
     }
 }
