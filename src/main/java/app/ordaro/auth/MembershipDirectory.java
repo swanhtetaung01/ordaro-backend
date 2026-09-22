@@ -24,8 +24,10 @@ import app.ordaro.org.MembershipStatus;
  * <li>{@link #forAccount} / {@link #activeFor} — the login picker and switch, by account id.</li>
  * <li>{@link #findInviteByCodeHash} — by the hash of a 6-character invite code.</li>
  * </ul>
- * Step 6 (RLS): the first two are covered by {@code app.org} / {@code app.account}; the invite
- * lookup crosses organizations and needs its own path before the policies switch on.
+ * Step 6 (RLS): each of these runs before a tenant is known, so none of them can satisfy a
+ * policy. They go through the {@code ordaro.auth_*} SECURITY DEFINER functions of V9, which are
+ * owned by {@code ordaro_owner}, keyed by an id or an unguessable hash, and return only these
+ * columns.
  */
 @Component
 public class MembershipDirectory {
@@ -38,10 +40,8 @@ public class MembershipDirectory {
     public record Invite(UUID membershipId, UUID organizationId, MembershipStatus status, Instant expiresAt) {
     }
 
-    private static final String SNAPSHOT = """
-            select id, organization_id, account_id, role, status, location_id
-            from membership
-            """;
+    private static final String SNAPSHOT =
+            "select id, organization_id, account_id, role, status, location_id from ";
 
     private final JdbcTemplate jdbc;
 
@@ -50,26 +50,18 @@ public class MembershipDirectory {
     }
 
     public Optional<MembershipSnapshot> find(UUID membershipId) {
-        return jdbc.query(SNAPSHOT + "where id = ?", MembershipDirectory::snapshot, membershipId)
+        return jdbc.query(SNAPSHOT + "ordaro.auth_membership(?)", MembershipDirectory::snapshot, membershipId)
                 .stream().findFirst();
     }
 
     public Optional<MembershipSnapshot> activeFor(UUID accountId, UUID organizationId) {
-        return jdbc.query(SNAPSHOT + "where account_id = ? and organization_id = ? and status = 'ACTIVE'",
+        return jdbc.query(SNAPSHOT + "ordaro.auth_membership_active(?, ?)",
                 MembershipDirectory::snapshot, accountId, organizationId).stream().findFirst();
     }
 
     /** The picker: one native query, filtered by account (spec §12). */
     public List<PickerEntry> forAccount(UUID accountId) {
-        return jdbc.query("""
-                select m.id, m.organization_id, o.name, m.display_name, m.role, m.status
-                from membership m
-                join organization o on o.id = m.organization_id
-                where m.account_id = ?
-                  and m.status in ('ACTIVE', 'INVITED')
-                  and m.archived_at is null
-                order by o.name, m.created_at
-                """,
+        return jdbc.query("select * from ordaro.auth_memberships_for_account(?)",
                 (rs, i) -> new PickerEntry(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getString(3), rs.getString(4), MembershipRole.valueOf(rs.getString(5)),
                         MembershipStatus.valueOf(rs.getString(6))),
@@ -77,11 +69,7 @@ public class MembershipDirectory {
     }
 
     public Optional<Invite> findInviteByCodeHash(String codeHash) {
-        return jdbc.query("""
-                select id, organization_id, status, invite_expires_at
-                from membership
-                where invite_code_hash = ?
-                """,
+        return jdbc.query("select * from ordaro.auth_membership_by_invite(?)",
                 (rs, i) -> new Invite(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         MembershipStatus.valueOf(rs.getString(3)), instant(rs.getTimestamp(4))),
                 codeHash).stream().findFirst();

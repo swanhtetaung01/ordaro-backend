@@ -181,16 +181,17 @@ class SaleReturnTest extends IntegrationTest {
                 StockMovementType.SALE_RETURN, StockMovementType.SALE, StockMovementType.STOCK_IN);
 
         // §9.3, verbatim: sales side minus the returns side
-        Map<String, Object> s = jdbc.queryForMap("""
+        // raw SQL on the app pool: it only sees rows once the connection carries the tenant (RLS)
+        Map<String, Object> s = shops.as(shop, () -> jdbc.queryForMap("""
                 select sum(sl.line_total - sl.tax_amount) net_revenue, sum(sl.unit_cost * sl.quantity) cogs
                 from sale_line sl join sale s on s.id = sl.sale_id
                 where s.organization_id = ? and s.status in ('COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED')""",
-                shop.organizationId());
-        Map<String, Object> r = jdbc.queryForMap("""
+                shop.organizationId()));
+        Map<String, Object> r = shops.as(shop, () -> jdbc.queryForMap("""
                 select sum(rl.refund_amount - rl.tax_amount) revenue_reversed,
                        sum(case when rl.restock then rl.unit_cost * rl.quantity else 0 end) cogs_reversed
                 from sale_return_line rl join sale_return r on r.id = rl.return_id
-                where r.organization_id = ?""", shop.organizationId());
+                where r.organization_id = ?""", shop.organizationId()));
         BigDecimal netRevenue = (BigDecimal) s.get("net_revenue");
         BigDecimal cogs = (BigDecimal) s.get("cogs");
         BigDecimal revenueReversed = (BigDecimal) r.get("revenue_reversed");
