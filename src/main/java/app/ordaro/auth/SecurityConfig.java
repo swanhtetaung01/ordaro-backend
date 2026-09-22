@@ -20,6 +20,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
+import app.ordaro.shared.web.ProblemAccessHandler;
+
 /**
  * Stateless bearer-token API (Spring Security 7, lambda DSL). After the JWT is verified,
  * {@link TenantMembershipFilter} checks the membership it names and sets the tenant.
@@ -42,7 +44,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain api(HttpSecurity http, JwtDecoder jwtDecoder, MembershipCheck membershipCheck,
-            DeviceCheck deviceCheck) throws Exception {
+            DeviceCheck deviceCheck, ProblemAccessHandler problems) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
@@ -54,7 +56,11 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/auth/**").hasAnyAuthority(USER_SESSION, PICKER_SESSION)
                         .anyRequest().hasAuthority(TENANT_SESSION))
-                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)))
+                // 401 and 403 answer with the same problem+json body as every other error
+                .exceptionHandling(handling -> handling.authenticationEntryPoint(problems)
+                        .accessDeniedHandler(problems))
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder))
+                        .authenticationEntryPoint(problems).accessDeniedHandler(problems))
                 .addFilterAfter(new TenantMembershipFilter(membershipCheck, deviceCheck),
                         BearerTokenAuthenticationFilter.class);
         return http.build();

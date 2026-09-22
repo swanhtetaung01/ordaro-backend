@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -33,6 +35,7 @@ import app.ordaro.inventory.StockDocumentService.LineCommand;
 @PreAuthorize("hasAnyRole('OWNER', 'STOCK_MANAGER')")
 class StockDocumentController {
 
+    @Schema(name = "StockDocumentLineRequest")
     record LineRequest(@NotNull UUID productId, @NotNull BigDecimal quantity, BigDecimal unitCost,
             StockMovementReason reason) {
     }
@@ -56,6 +59,7 @@ class StockDocumentController {
         }
     }
 
+    @Schema(name = "StockDocumentLineView")
     record LineView(int position, UUID productId, BigDecimal quantity, BigDecimal unitCost,
             StockMovementReason reason) {
     }

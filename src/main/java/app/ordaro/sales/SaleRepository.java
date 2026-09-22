@@ -7,12 +7,13 @@ import java.util.UUID;
 import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Tenant-scoped by {@code @TenantId}. */
-public interface SaleRepository extends JpaRepository<Sale, UUID> {
+public interface SaleRepository extends JpaRepository<Sale, UUID>, JpaSpecificationExecutor<Sale> {
 
     Optional<Sale> findByLocationIdAndIdempotencyKey(UUID locationId, String idempotencyKey);
 

@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -33,6 +35,7 @@ import app.ordaro.sales.ReturnService.ReturnResult;
 @PreAuthorize("hasAnyRole('OWNER', 'STOCK_MANAGER', 'CASHIER')")
 class ReturnController {
 
+    @Schema(name = "ReturnLineRequest")
     record LineRequest(@NotNull UUID saleLineId, @NotNull BigDecimal quantity, Boolean restock) {
     }
 
@@ -49,6 +52,7 @@ class ReturnController {
     }
 
     /** {@code unitCost} is null for roles that do not see costs. */
+    @Schema(name = "ReturnLineView")
     record LineView(UUID id, UUID saleLineId, UUID productId, BigDecimal quantity, BigDecimal refundAmount,
             BigDecimal taxAmount, boolean restock, BigDecimal unitCost) {
     }

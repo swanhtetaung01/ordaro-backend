@@ -1,9 +1,16 @@
 package app.ordaro.sales;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +29,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,7 +37,11 @@ import app.ordaro.sales.SaleService.CartCommand;
 import app.ordaro.sales.SaleService.CompletionResult;
 import app.ordaro.sales.SaleService.LineCommand;
 import app.ordaro.sales.SaleService.PaymentCommand;
+import app.ordaro.org.OrganizationRepository;
 import app.ordaro.sales.SaleService.SaleDetails;
+import app.ordaro.sales.SaleService.SaleQuery;
+import app.ordaro.sales.SaleService.SaleSummary;
+import app.ordaro.shared.tenant.TenantContext;
 
 /** The register's API. Owners, stock managers and cashiers; not packers. */
 @RestController
@@ -37,6 +49,7 @@ import app.ordaro.sales.SaleService.SaleDetails;
 @PreAuthorize("hasAnyRole('OWNER', 'STOCK_MANAGER', 'CASHIER')")
 class SaleController {
 
+    @Schema(name = "SaleLineRequest")
     record LineRequest(@NotNull UUID productId, @NotNull BigDecimal quantity, BigDecimal discountAmount) {
     }
 
@@ -78,6 +91,7 @@ class SaleController {
     }
 
     /** {@code unitCost} is null for roles that do not see costs, and for parked carts. */
+    @Schema(name = "SaleLineView")
     record LineView(UUID id, int position, UUID productId, String productName, String sku, BigDecimal quantity,
             BigDecimal unitPrice, BigDecimal discountAmount, BigDecimal cartDiscountAllocated, BigDecimal taxRate,
             BigDecimal taxAmount, BigDecimal lineTotal, BigDecimal unitCost) {
@@ -88,16 +102,18 @@ class SaleController {
     }
 
     record SaleView(UUID id, String receiptNumber, SaleStatus status, SaleChannel channel, UUID locationId,
-            UUID cashierShiftId, UUID customerId, PriceType priceType, boolean taxInclusive, BigDecimal subtotal,
+            UUID cashierShiftId, UUID customerId, String customerName, PriceType priceType, boolean taxInclusive,
+            BigDecimal subtotal,
             BigDecimal lineDiscountTotal, BigDecimal cartDiscountAmount, BigDecimal taxAmount,
             BigDecimal roundingAdjustment, BigDecimal total, BigDecimal paidAmount, BigDecimal dueAmount,
             Instant soldAt, List<LineView> lines, List<PaymentView> payments) {
 
-        static SaleView of(SaleDetails d, boolean seesCost) {
+        static SaleView of(SaleDetails d, String customerName, boolean seesCost) {
             Sale s = d.sale();
             boolean costKnown = seesCost && !s.isOpenCart() && s.getStatus() != SaleStatus.VOID;
             return new SaleView(s.getId(), s.getReceiptNumber(), s.getStatus(), s.getChannel(), s.getLocationId(),
-                    s.getCashierShiftId(), s.getCustomerId(), s.getPriceType(), s.isTaxInclusive(), s.getSubtotal(),
+                    s.getCashierShiftId(), s.getCustomerId(), customerName, s.getPriceType(), s.isTaxInclusive(),
+                    s.getSubtotal(),
                     s.getLineDiscountTotal(), s.getCartDiscountAmount(), s.getTaxAmount(), s.getRoundingAdjustment(),
                     s.getTotal(), s.getPaidAmount(), s.getDueAmount(), s.getSoldAt(),
                     d.lines().stream().map(l -> new LineView(l.getId(), l.getPosition(), l.getProductId(),
@@ -110,12 +126,51 @@ class SaleController {
         }
     }
 
+    /** A row of the sales log or the held-cart list: totals only, no lines or payments. */
+    record SaleSummaryView(UUID id, String receiptNumber, SaleStatus status, SaleChannel channel, UUID locationId,
+            UUID cashierShiftId, UUID customerId, String customerName, PriceType priceType, BigDecimal total,
+            BigDecimal paidAmount, long lineCount, Instant soldAt, Instant createdAt) {
+
+        static SaleSummaryView of(SaleSummary summary) {
+            Sale s = summary.sale();
+            return new SaleSummaryView(s.getId(), s.getReceiptNumber(), s.getStatus(), s.getChannel(),
+                    s.getLocationId(), s.getCashierShiftId(), s.getCustomerId(), summary.customerName(),
+                    s.getPriceType(), s.getTotal(), s.getPaidAmount(), summary.lineCount(), s.getSoldAt(),
+                    s.getCreatedAt());
+        }
+    }
+
     private final SaleService sales;
     private final SaleCheckout checkout;
+    private final OrganizationRepository organizations;
+    private final Clock clock;
 
-    SaleController(SaleService sales, SaleCheckout checkout) {
+    SaleController(SaleService sales, SaleCheckout checkout, OrganizationRepository organizations, Clock clock) {
         this.sales = sales;
         this.checkout = checkout;
+        this.organizations = organizations;
+        this.clock = clock;
+    }
+
+    /**
+     * The sales log and the held-cart list, newest first. {@code status} takes one or more names
+     * ({@code ?status=HELD}, {@code ?status=COMPLETED&status=REFUNDED}); none means every status.
+     * {@code from}/{@code to} are dates in the organization's timezone, {@code to} inclusive;
+     * with neither, the last 30 days.
+     */
+    @GetMapping
+    List<SaleSummaryView> list(@RequestParam(required = false) List<SaleStatus> status,
+            @RequestParam(required = false) UUID locationId, @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) LocalDate from, @RequestParam(required = false) LocalDate to,
+            @RequestParam(defaultValue = "100") int limit) {
+        ZoneId zone = ZoneId.of(organizations.findById(TenantContext.requireOrganizationId()).orElseThrow()
+                .getTimezone());
+        LocalDate today = LocalDate.now(clock.withZone(zone));
+        LocalDate start = from != null ? from : today.minusDays(30);
+        LocalDate end = to != null ? to : today;
+        return sales.search(new SaleQuery(status == null ? Set.of() : EnumSet.copyOf(status), locationId, customerId,
+                start.atStartOfDay(zone).toInstant(), end.plusDays(1).atStartOfDay(zone).toInstant(), limit))
+                .stream().map(SaleSummaryView::of).toList();
     }
 
     /** Complete a basket in one call. A repeat of the same key returns the original with 200. */
@@ -125,40 +180,44 @@ class SaleController {
                 payments(request.payments()));
         return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .header("Idempotent-Replay", String.valueOf(result.replayed()))
-                .body(SaleView.of(result.details(), seesCost(auth)));
+                .body(view(result.details(), auth));
     }
 
     /** Park a cart as DRAFT, or HELD with {@code hold: true}. No number, no stock, no cost. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     SaleView saveCart(@Valid @RequestBody CartRequest request, Authentication auth) {
-        return SaleView.of(sales.saveCart(request.command(), request.holdNow()), seesCost(auth));
+        return view(sales.saveCart(request.command(), request.holdNow()), auth);
     }
 
     @PutMapping("/{id}")
     SaleView replaceCart(@PathVariable UUID id, @Valid @RequestBody CartRequest request, Authentication auth) {
-        return SaleView.of(sales.replaceCart(id, request.command(), request.holdNow()), seesCost(auth));
+        return view(sales.replaceCart(id, request.command(), request.holdNow()), auth);
     }
 
     @PostMapping("/{id}/hold")
     SaleView hold(@PathVariable UUID id, Authentication auth) {
-        return SaleView.of(sales.hold(id), seesCost(auth));
+        return view(sales.hold(id), auth);
     }
 
     @PostMapping("/{id}/complete")
     SaleView complete(@PathVariable UUID id, @Valid @RequestBody CompleteRequest request, Authentication auth) {
-        return SaleView.of(checkout.completeCart(id, request.idempotencyKey(), payments(request.payments()))
-                .details(), seesCost(auth));
+        return view(checkout.completeCart(id, request.idempotencyKey(), payments(request.payments())).details(),
+                auth);
     }
 
     @PostMapping("/{id}/void")
     SaleView voidCart(@PathVariable UUID id, Authentication auth) {
-        return SaleView.of(sales.voidCart(id), seesCost(auth));
+        return view(sales.voidCart(id), auth);
     }
 
     @GetMapping("/{id}")
     SaleView get(@PathVariable UUID id, Authentication auth) {
-        return SaleView.of(sales.find(id), seesCost(auth));
+        return view(sales.find(id), auth);
+    }
+
+    private SaleView view(SaleDetails details, Authentication auth) {
+        return SaleView.of(details, sales.customerNameOf(details.sale()), seesCost(auth));
     }
 
     private static List<PaymentCommand> payments(List<PaymentRequest> requests) {

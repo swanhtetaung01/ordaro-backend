@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -38,6 +40,7 @@ import app.ordaro.shared.web.ApiException;
 @PreAuthorize("hasAnyRole('OWNER', 'STOCK_MANAGER', 'CASHIER')")
 class ExpenseController {
 
+    @Schema(name = "ExpenseCategoryView")
     record CategoryView(UUID id, String name) {
 
         static CategoryView of(ExpenseCategory c) {
@@ -45,6 +48,7 @@ class ExpenseController {
         }
     }
 
+    @Schema(name = "ExpenseCategoryWrite")
     record CategoryWrite(@NotBlank @Size(max = 120) String name) {
     }
 
