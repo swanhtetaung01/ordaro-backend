@@ -223,7 +223,7 @@ class SaleCompletionTest extends IntegrationTest {
         assertCode(() -> checkout("short", cart(oil, "2"), cash("1500", null)), "payment_mismatch");
         assertCode(() -> checkout("credit", cart(oil, "1"),
                 List.of(new PaymentCommand(PaymentMethod.CREDIT, new BigDecimal("1000"), null, null))),
-                "credit_not_available");
+                "customer_required"); // a walk-in never gets credit
         assertCode(() -> checkout("tender", cart(oil, "1"), cash("1000", "900")), "insufficient_tender");
         assertCode(() -> checkout("wallet-tender", cart(oil, "1"),
                 List.of(new PaymentCommand(PaymentMethod.KBZ_PAY, new BigDecimal("1000"), new BigDecimal("1000"),

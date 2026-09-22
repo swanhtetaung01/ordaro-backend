@@ -57,6 +57,12 @@ class ShiftController {
         return ShiftView.of(shifts.current(locationId));
     }
 
+    /** What the drawer should hold, and why — for the close screen. */
+    @GetMapping("/{id}/drawer")
+    ShiftService.Drawer drawer(@PathVariable UUID id) {
+        return shifts.drawer(id);
+    }
+
     /** Count the drawer; the variance is stored now and never recomputed. */
     @PostMapping("/{id}/close")
     ShiftView close(@PathVariable UUID id, @Valid @RequestBody CloseRequest request) {

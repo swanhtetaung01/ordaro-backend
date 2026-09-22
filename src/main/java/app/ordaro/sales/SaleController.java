@@ -47,11 +47,13 @@ class SaleController {
     /** {@code Boolean}, not {@code boolean}: Jackson 3 fails on a record's missing primitive. */
     record CartRequest(@NotNull UUID locationId, @NotNull SaleChannel channel, UUID cashierShiftId,
             PriceType priceType, BigDecimal cartDiscountAmount,
-            @NotEmpty @Size(max = SaleService.MAX_LINES) List<@Valid LineRequest> lines, Boolean hold) {
+            @NotEmpty @Size(max = SaleService.MAX_LINES) List<@Valid LineRequest> lines, Boolean hold,
+            UUID customerId) {
 
         CartCommand command() {
             return new CartCommand(locationId, channel, cashierShiftId, priceType, cartDiscountAmount,
-                    lines.stream().map(l -> new LineCommand(l.productId(), l.quantity(), l.discountAmount())).toList());
+                    lines.stream().map(l -> new LineCommand(l.productId(), l.quantity(), l.discountAmount())).toList(),
+                    customerId);
         }
 
         boolean holdNow() {
@@ -62,11 +64,12 @@ class SaleController {
     record CheckoutRequest(@NotBlank @Size(max = 100) String idempotencyKey, @NotNull UUID locationId,
             @NotNull SaleChannel channel, UUID cashierShiftId, PriceType priceType, BigDecimal cartDiscountAmount,
             @NotEmpty @Size(max = SaleService.MAX_LINES) List<@Valid LineRequest> lines,
-            @NotEmpty List<@Valid PaymentRequest> payments) {
+            @NotEmpty List<@Valid PaymentRequest> payments, UUID customerId) {
 
         CartCommand cart() {
             return new CartCommand(locationId, channel, cashierShiftId, priceType, cartDiscountAmount,
-                    lines.stream().map(l -> new LineCommand(l.productId(), l.quantity(), l.discountAmount())).toList());
+                    lines.stream().map(l -> new LineCommand(l.productId(), l.quantity(), l.discountAmount())).toList(),
+                    customerId);
         }
     }
 
@@ -85,7 +88,7 @@ class SaleController {
     }
 
     record SaleView(UUID id, String receiptNumber, SaleStatus status, SaleChannel channel, UUID locationId,
-            UUID cashierShiftId, PriceType priceType, boolean taxInclusive, BigDecimal subtotal,
+            UUID cashierShiftId, UUID customerId, PriceType priceType, boolean taxInclusive, BigDecimal subtotal,
             BigDecimal lineDiscountTotal, BigDecimal cartDiscountAmount, BigDecimal taxAmount,
             BigDecimal roundingAdjustment, BigDecimal total, BigDecimal paidAmount, BigDecimal dueAmount,
             Instant soldAt, List<LineView> lines, List<PaymentView> payments) {
@@ -94,7 +97,7 @@ class SaleController {
             Sale s = d.sale();
             boolean costKnown = seesCost && !s.isOpenCart() && s.getStatus() != SaleStatus.VOID;
             return new SaleView(s.getId(), s.getReceiptNumber(), s.getStatus(), s.getChannel(), s.getLocationId(),
-                    s.getCashierShiftId(), s.getPriceType(), s.isTaxInclusive(), s.getSubtotal(),
+                    s.getCashierShiftId(), s.getCustomerId(), s.getPriceType(), s.isTaxInclusive(), s.getSubtotal(),
                     s.getLineDiscountTotal(), s.getCartDiscountAmount(), s.getTaxAmount(), s.getRoundingAdjustment(),
                     s.getTotal(), s.getPaidAmount(), s.getDueAmount(), s.getSoldAt(),
                     d.lines().stream().map(l -> new LineView(l.getPosition(), l.getProductId(), l.getProductName(),

@@ -76,7 +76,7 @@ public class Sale extends TenantEntity {
     @Column(name = "total", nullable = false, precision = 19, scale = 4)
     private BigDecimal total = BigDecimal.ZERO;
 
-    /** Frozen at completion as history; who owes money is answered by Receivable (step 5). */
+    /** Frozen at completion as history; who owes money is answered by Receivable, never these. */
     @Column(name = "paid_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
@@ -93,20 +93,23 @@ public class Sale extends TenantEntity {
     protected Sale() {
     }
 
-    Sale(UUID locationId, SaleChannel channel, UUID cashierShiftId, PriceType priceType, boolean taxInclusive,
-            SaleStatus status) {
+    Sale(UUID locationId, SaleChannel channel, UUID cashierShiftId, UUID customerId, PriceType priceType,
+            boolean taxInclusive, SaleStatus status) {
         this.locationId = locationId;
         this.channel = channel;
         this.cashierShiftId = cashierShiftId;
+        this.customerId = customerId;
         this.priceType = priceType;
         this.taxInclusive = taxInclusive;
         this.status = status;
     }
 
-    void reviseCart(SaleChannel channel, UUID cashierShiftId, PriceType priceType, boolean taxInclusive) {
+    void reviseCart(SaleChannel channel, UUID cashierShiftId, UUID customerId, PriceType priceType,
+            boolean taxInclusive) {
         requireOpenCart();
         this.channel = channel;
         this.cashierShiftId = cashierShiftId;
+        this.customerId = customerId;
         this.priceType = priceType;
         this.taxInclusive = taxInclusive;
     }
