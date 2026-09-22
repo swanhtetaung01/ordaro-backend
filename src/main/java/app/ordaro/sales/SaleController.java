@@ -78,7 +78,7 @@ class SaleController {
     }
 
     /** {@code unitCost} is null for roles that do not see costs, and for parked carts. */
-    record LineView(int position, UUID productId, String productName, String sku, BigDecimal quantity,
+    record LineView(UUID id, int position, UUID productId, String productName, String sku, BigDecimal quantity,
             BigDecimal unitPrice, BigDecimal discountAmount, BigDecimal cartDiscountAllocated, BigDecimal taxRate,
             BigDecimal taxAmount, BigDecimal lineTotal, BigDecimal unitCost) {
     }
@@ -100,7 +100,8 @@ class SaleController {
                     s.getCashierShiftId(), s.getCustomerId(), s.getPriceType(), s.isTaxInclusive(), s.getSubtotal(),
                     s.getLineDiscountTotal(), s.getCartDiscountAmount(), s.getTaxAmount(), s.getRoundingAdjustment(),
                     s.getTotal(), s.getPaidAmount(), s.getDueAmount(), s.getSoldAt(),
-                    d.lines().stream().map(l -> new LineView(l.getPosition(), l.getProductId(), l.getProductName(),
+                    d.lines().stream().map(l -> new LineView(l.getId(), l.getPosition(), l.getProductId(),
+                            l.getProductName(),
                             l.getSku(), l.getQuantity(), l.getUnitPrice(), l.getDiscountAmount(),
                             l.getCartDiscountAllocated(), l.getTaxRate(), l.getTaxAmount(), l.getLineTotal(),
                             costKnown ? l.getUnitCost() : null)).toList(),

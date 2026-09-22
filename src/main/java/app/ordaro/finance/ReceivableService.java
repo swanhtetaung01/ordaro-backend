@@ -152,6 +152,19 @@ public class ReceivableService {
         return new SettlementResult(details(receivable), settlement, false);
     }
 
+    /**
+     * A return on a credit sale never pays out cash: the refund lands here as a CREDIT settlement
+     * (spec §7). The caller has checked it fits what is outstanding. In the return's transaction.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ReceivableSettlement settleByReturn(UUID receivableId, BigDecimal amount, UUID locationId,
+            String returnNumber, Instant at) {
+        Receivable receivable = receivables.lockById(receivableId).orElseThrow(ReceivableService::notFound);
+        receivable.settle(amount);
+        return settlements.save(new ReceivableSettlement(receivableId, locationId, null, PaymentMethod.CREDIT,
+                amount, returnNumber, at, "return " + returnNumber, null));
+    }
+
     /** Gives up what is still owed. Owners only (checked by the controller). */
     @Transactional
     public ReceivableDetails writeOff(UUID receivableId, String reason) {
@@ -179,6 +192,11 @@ public class ReceivableService {
         return customerId == null
                 ? receivables.search(statuses, dueBefore, page)
                 : receivables.searchForCustomer(customerId, statuses, dueBefore, page);
+    }
+
+    /** The receivable a credit sale opened, or null when the sale was not taken on credit. */
+    public Receivable forSale(UUID saleId) {
+        return receivables.findBySourceTypeAndSourceId(ReceivableSourceType.SALE, saleId).orElse(null);
     }
 
     public BigDecimal outstandingFor(UUID customerId) {
