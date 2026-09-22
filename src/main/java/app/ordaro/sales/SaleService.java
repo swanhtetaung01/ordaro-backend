@@ -5,7 +5,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Currency;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import app.ordaro.catalog.Product;
 import app.ordaro.catalog.ProductRepository;
+import app.ordaro.crm.Customer;
+import app.ordaro.crm.CustomerRepository;
+import app.ordaro.finance.ReceivableService;
 import app.ordaro.inventory.StockLedger;
 import app.ordaro.inventory.StockLedger.Cost;
 import app.ordaro.inventory.StockLedger.Entry;
@@ -30,6 +32,7 @@ import app.ordaro.sales.SaleCalculator.LineInput;
 import app.ordaro.sales.SaleCalculator.Priced;
 import app.ordaro.sales.SaleCalculator.PricedLine;
 import app.ordaro.shared.numbering.DocumentNumbers;
+import app.ordaro.shared.money.Money;
 import app.ordaro.shared.numbering.DocumentSequenceType;
 import app.ordaro.shared.tenant.TenantContext;
 import app.ordaro.shared.web.ApiException;
@@ -46,7 +49,8 @@ import app.ordaro.shared.web.ApiException;
  * per tracked line, update balances (§9.2 steps 1, 2, 5, 6);</li>
  * <li>copy each movement's unit cost into its line — the snapshot gross profit rests on
  * (step 3); 0 for products that do not track inventory;</li>
- * <li>insert payments and complete the sale (steps 7, 8).</li>
+ * <li>insert payments — a CREDIT payment locks the customer, checks the limit and opens a
+ * receivable — and complete the sale (steps 7, 8).</li>
  * </ol>
  * The receipt number is taken before the movements so each movement carries it; within one
  * transaction the order is invisible.
@@ -59,8 +63,14 @@ public class SaleService {
     public record LineCommand(UUID productId, BigDecimal quantity, BigDecimal discountAmount) {
     }
 
+    /** {@code customerId} null is a walk-in; {@code priceType} null takes the customer's, else RETAIL. */
     public record CartCommand(UUID locationId, SaleChannel channel, UUID cashierShiftId, PriceType priceType,
-            BigDecimal cartDiscountAmount, List<LineCommand> lines) {
+            BigDecimal cartDiscountAmount, List<LineCommand> lines, UUID customerId) {
+
+        public CartCommand(UUID locationId, SaleChannel channel, UUID cashierShiftId, PriceType priceType,
+                BigDecimal cartDiscountAmount, List<LineCommand> lines) {
+            this(locationId, channel, cashierShiftId, priceType, cartDiscountAmount, lines, null);
+        }
     }
 
     public record PaymentCommand(PaymentMethod method, BigDecimal amount, BigDecimal tenderedAmount,
@@ -83,11 +93,14 @@ public class SaleService {
     private final OrganizationRepository organizations;
     private final StockLedger ledger;
     private final DocumentNumbers numbers;
+    private final CustomerRepository customers;
+    private final ReceivableService receivables;
     private final Clock clock;
 
     public SaleService(SaleRepository sales, SaleLineRepository lines, PaymentRepository payments,
             CashierShiftRepository shifts, ShiftService shiftService, ProductRepository products,
-            OrganizationRepository organizations, StockLedger ledger, DocumentNumbers numbers, Clock clock) {
+            OrganizationRepository organizations, StockLedger ledger, DocumentNumbers numbers,
+            CustomerRepository customers, ReceivableService receivables, Clock clock) {
         this.sales = sales;
         this.lines = lines;
         this.payments = payments;
@@ -97,6 +110,8 @@ public class SaleService {
         this.organizations = organizations;
         this.ledger = ledger;
         this.numbers = numbers;
+        this.customers = customers;
+        this.receivables = receivables;
         this.clock = clock;
     }
 
@@ -106,9 +121,10 @@ public class SaleService {
     public SaleDetails saveCart(CartCommand cart, boolean hold) {
         Organization organization = organization();
         validateCartHeader(cart, false);
-        Sale sale = sales.save(new Sale(cart.locationId(), cart.channel(), cart.cashierShiftId(),
-                priceType(cart), organization.isTaxInclusivePricing(), hold ? SaleStatus.HELD : SaleStatus.DRAFT));
-        return new SaleDetails(sale, writeProvisionalLines(sale, cart, organization), List.of());
+        PriceType priceType = priceType(cart);
+        Sale sale = sales.save(new Sale(cart.locationId(), cart.channel(), cart.cashierShiftId(), cart.customerId(),
+                priceType, organization.isTaxInclusivePricing(), hold ? SaleStatus.HELD : SaleStatus.DRAFT));
+        return new SaleDetails(sale, writeProvisionalLines(sale, cart, priceType, organization), List.of());
     }
 
     @Transactional
@@ -119,9 +135,11 @@ public class SaleService {
         if (!sale.getLocationId().equals(cart.locationId())) {
             throw ApiException.badRequest("location_changed", "a cart stays at the location it was started at");
         }
-        sale.reviseCart(cart.channel(), cart.cashierShiftId(), priceType(cart), organization.isTaxInclusivePricing());
+        PriceType priceType = priceType(cart);
+        sale.reviseCart(cart.channel(), cart.cashierShiftId(), cart.customerId(), priceType,
+                organization.isTaxInclusivePricing());
         lines.deleteAllOfSale(saleId);
-        List<SaleLine> saved = writeProvisionalLines(sale, cart, organization);
+        List<SaleLine> saved = writeProvisionalLines(sale, cart, priceType, organization);
         if (hold && sale.getStatus() == SaleStatus.DRAFT) {
             sale.hold();
         }
@@ -161,8 +179,8 @@ public class SaleService {
         }
         Organization organization = organization();
         validateCartHeader(cart, true);
-        Sale sale = new Sale(cart.locationId(), cart.channel(), cart.cashierShiftId(), priceType(cart),
-                organization.isTaxInclusivePricing(), SaleStatus.DRAFT);
+        Sale sale = new Sale(cart.locationId(), cart.channel(), cart.cashierShiftId(), cart.customerId(),
+                priceType(cart), organization.isTaxInclusivePricing(), SaleStatus.DRAFT);
         sale.claimIdempotencyKey(idempotencyKey);
         sale = sales.saveAndFlush(sale); // a concurrent retry now waits here on the unique index
         return new CompletionResult(complete(sale, cart, tenders, organization), false);
@@ -185,10 +203,11 @@ public class SaleService {
                 .map(l -> new LineCommand(l.getProductId(), l.getQuantity(), l.getDiscountAmount()))
                 .toList();
         CartCommand cart = new CartCommand(sale.getLocationId(), sale.getChannel(), sale.getCashierShiftId(),
-                sale.getPriceType(), sale.getCartDiscountAmount(), cartLines);
+                sale.getPriceType(), sale.getCartDiscountAmount(), cartLines, sale.getCustomerId());
         Organization organization = organization();
         validateCartHeader(cart, true);
-        sale.reviseCart(cart.channel(), cart.cashierShiftId(), cart.priceType(), organization.isTaxInclusivePricing());
+        sale.reviseCart(cart.channel(), cart.cashierShiftId(), cart.customerId(), cart.priceType(),
+                organization.isTaxInclusivePricing());
         sale.claimIdempotencyKey(idempotencyKey);
         sales.saveAndFlush(sale);
         lines.deleteAllOfSale(saleId);
@@ -199,8 +218,9 @@ public class SaleService {
             Organization organization) {
         int minor = minorDigits(organization);
         Map<UUID, Product> catalog = sellable(cart);
-        Priced priced = price(cart, catalog, organization, minor);
-        List<PaymentCommand> validTenders = validatePayments(tenders, priced.totals().total(), minor);
+        Priced priced = price(cart, priceType(cart), catalog, organization, minor);
+        List<PaymentCommand> validTenders = validatePayments(tenders, priced.totals().total(), minor,
+                cart.customerId() != null);
 
         Location location = shiftService.requireStore(cart.locationId());
         Instant soldAt = clock.instant();
@@ -235,6 +255,11 @@ public class SaleService {
         for (PaymentCommand tender : validTenders) {
             savedPayments.add(payments.save(new Payment(sale.getId(), tender.method(), tender.amount(),
                     tender.tenderedAmount(), tender.referenceNo())));
+            // a CREDIT payment closes the sale and opens a receivable for the same amount (spec §6)
+            if (tender.method() == PaymentMethod.CREDIT) {
+                receivables.openForSale(cart.customerId(), cart.locationId(), sale.getId(), receipt, tender.amount(),
+                        soldAt, ZoneId.of(organization.getTimezone()));
+            }
             paid = paid.add(tender.amount());
         }
         sale.applyTotals(priced.totals());
@@ -265,9 +290,10 @@ public class SaleService {
 
     // ───────────────────────────────────────────────────────────── validation and pricing
 
-    private List<SaleLine> writeProvisionalLines(Sale sale, CartCommand cart, Organization organization) {
+    private List<SaleLine> writeProvisionalLines(Sale sale, CartCommand cart, PriceType priceType,
+            Organization organization) {
         int minor = minorDigits(organization);
-        Priced priced = price(cart, sellable(cart), organization, minor);
+        Priced priced = price(cart, priceType, sellable(cart), organization, minor);
         sale.applyTotals(priced.totals());
         List<SaleLine> saved = new ArrayList<>();
         for (int i = 0; i < priced.lines().size(); i++) {
@@ -282,6 +308,9 @@ public class SaleService {
             throw ApiException.badRequest("validation_failed", "locationId and channel are required");
         }
         shiftService.requireStore(cart.locationId());
+        if (cart.customerId() != null) {
+            customer(cart.customerId());
+        }
         switch (cart.channel()) {
             case ORDER -> throw ApiException.badRequest("orders_not_available",
                     "order fulfilment arrives with the Order entity; use POS or ONLINE");
@@ -334,8 +363,8 @@ public class SaleService {
         return catalog;
     }
 
-    private static Priced price(CartCommand cart, Map<UUID, Product> catalog, Organization organization, int minor) {
-        PriceType priceType = priceType(cart);
+    private static Priced price(CartCommand cart, PriceType priceType, Map<UUID, Product> catalog,
+            Organization organization, int minor) {
         List<LineInput> inputs = cart.lines().stream().map(line -> {
             Product p = catalog.get(line.productId());
             BigDecimal unitPrice = priceType == PriceType.WHOLESALE && p.getWholesalePrice() != null
@@ -349,20 +378,30 @@ public class SaleService {
                 organization.getRoundTotalToNearest());
     }
 
-    /** Σ payments must equal the total: a completed sale has nothing due (spec §6). */
-    private static List<PaymentCommand> validatePayments(List<PaymentCommand> tenders, BigDecimal total, int minor) {
+    /**
+     * Σ payments must equal the total: a completed sale has nothing due (spec §6). A CREDIT payment
+     * counts toward that sum, needs a named customer, and appears at most once.
+     */
+    private static List<PaymentCommand> validatePayments(List<PaymentCommand> tenders, BigDecimal total, int minor,
+            boolean hasCustomer) {
         if (tenders == null || tenders.isEmpty()) {
             throw ApiException.badRequest("payment_required", "a completed sale is paid");
         }
         BigDecimal sum = BigDecimal.ZERO;
+        int credits = 0;
         for (PaymentCommand tender : tenders) {
             if (tender.method() == null || tender.amount() == null || tender.amount().signum() <= 0
                     || tender.amount().stripTrailingZeros().scale() > minor) {
                 throw ApiException.badRequest("invalid_payment", "each payment has a method and a positive amount");
             }
             if (tender.method() == PaymentMethod.CREDIT) {
-                throw ApiException.badRequest("credit_not_available",
-                        "credit sales need a customer and a receivable, which arrive in step 5");
+                if (!hasCustomer) {
+                    throw ApiException.badRequest("customer_required",
+                            "credit is given to a named customer, never a walk-in");
+                }
+                if (++credits > 1) {
+                    throw ApiException.badRequest("invalid_payment", "a sale has at most one CREDIT payment");
+                }
             }
             if (tender.tenderedAmount() != null) {
                 if (tender.method() != PaymentMethod.CASH) {
@@ -394,12 +433,25 @@ public class SaleService {
         return organizations.findById(TenantContext.requireOrganizationId()).orElseThrow();
     }
 
-    private static PriceType priceType(CartCommand cart) {
-        return cart.priceType() != null ? cart.priceType() : PriceType.RETAIL;
+    /** What the cart names, else the customer's default list (spec §6), else RETAIL. */
+    private PriceType priceType(CartCommand cart) {
+        if (cart.priceType() != null) {
+            return cart.priceType();
+        }
+        return cart.customerId() != null ? customer(cart.customerId()).getDefaultPriceType() : PriceType.RETAIL;
+    }
+
+    private Customer customer(UUID customerId) {
+        Customer customer = customers.findById(customerId)
+                .orElseThrow(() -> ApiException.badRequest("customer_not_found", "no such customer"));
+        if (customer.isArchived()) {
+            throw ApiException.badRequest("customer_archived", customer.getName() + " is archived");
+        }
+        return customer;
     }
 
     static int minorDigits(Organization organization) {
-        return Currency.getInstance(organization.getCurrencyCode()).getDefaultFractionDigits();
+        return Money.minorDigits(organization.getCurrencyCode());
     }
 
     private static void requireKey(String idempotencyKey) {

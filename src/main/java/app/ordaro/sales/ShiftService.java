@@ -17,15 +17,21 @@ import app.ordaro.shared.web.ApiException;
  * Opening and closing cashier shifts (spec §6). Only a STORE has shifts, one OPEN at a time.
  *
  * <p>Drawer rule: {@code expectedCash = openingFloat + Σ CASH applied on the shift's completed
- * sales − Σ CASH refunds − Σ CASH expenses − Σ CASH payable settlements}, each cash-out counting
- * only when its own {@code cashierShiftId} is this shift. Returns, expenses and payable
- * settlements arrive in step 5; until then the sales side is the whole formula.
+ * sales + Σ CASH receivable repayments − Σ CASH refunds − Σ CASH expenses − Σ CASH payable
+ * settlements}, each counting only when its own {@code cashierShiftId} is this shift. Repayments
+ * are an addition to the spec's formula (§12 Step 5 as built): cash a debtor hands over at the
+ * register is in the drawer. Refunds, expenses and payable settlements join in steps 5b–5d.
  */
 @Service
 public class ShiftService {
 
     static final EnumSet<SaleStatus> TOOK_MONEY = EnumSet.of(SaleStatus.COMPLETED, SaleStatus.PARTIALLY_REFUNDED,
             SaleStatus.REFUNDED);
+
+    /** Where the expected cash comes from, line by line: what the close screen shows. */
+    public record Drawer(BigDecimal openingFloat, BigDecimal cashSales, BigDecimal cashRepayments,
+            BigDecimal expectedCash) {
+    }
 
     private final CashierShiftRepository shifts;
     private final LocationRepository locations;
@@ -61,8 +67,39 @@ public class ShiftService {
         if (!shift.isOpen()) {
             throw ApiException.conflict("shift_closed", "the shift is already closed");
         }
-        BigDecimal expected = shift.getOpeningFloat().add(shifts.cashTaken(shiftId, TOOK_MONEY));
-        shift.close(TenantContext.requireMembershipId(), clock.instant(), expected, countedCash);
+        shift.close(TenantContext.requireMembershipId(), clock.instant(), drawerOf(shift).expectedCash(), countedCash);
+        return shift;
+    }
+
+    /** The running drawer of an open shift, or the one a closed shift was counted against. */
+    public Drawer drawer(UUID shiftId) {
+        CashierShift shift = shifts.findById(shiftId)
+                .orElseThrow(() -> ApiException.notFound("shift_not_found", "no such shift"));
+        TenantContext.requireLocationInScope(shift.getLocationId());
+        return drawerOf(shift);
+    }
+
+    private Drawer drawerOf(CashierShift shift) {
+        BigDecimal sales = shifts.cashTaken(shift.getId(), TOOK_MONEY);
+        BigDecimal repayments = shifts.cashCollected(shift.getId());
+        return new Drawer(shift.getOpeningFloat(), sales, repayments,
+                shift.getOpeningFloat().add(sales).add(repayments));
+    }
+
+    /**
+     * For money that moves through a drawer outside a sale — a repayment, a refund, an expense, a
+     * supplier paid in cash. Takes the same shared lock as a sale completion, so a close waits for
+     * it; the shift must be OPEN and at {@code locationId}.
+     */
+    public CashierShift requireOpenForCash(UUID shiftId, UUID locationId) {
+        CashierShift shift = shifts.lockShared(shiftId)
+                .orElseThrow(() -> ApiException.badRequest("shift_not_found", "no such shift"));
+        if (!shift.getLocationId().equals(locationId)) {
+            throw ApiException.badRequest("shift_elsewhere", "the shift belongs to another location");
+        }
+        if (!shift.isOpen()) {
+            throw ApiException.conflict("shift_closed", "the shift is closed");
+        }
         return shift;
     }
 
