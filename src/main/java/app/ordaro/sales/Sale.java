@@ -143,6 +143,20 @@ public class Sale extends TenantEntity {
         this.status = SaleStatus.COMPLETED;
     }
 
+    /** A return moves a completed sale to PARTIALLY_REFUNDED, or REFUNDED once every unit is back (spec §6). */
+    void markRefunded(boolean everythingReturned) {
+        if (!tookMoney()) {
+            throw new IllegalStateException("only a completed sale is refunded; this one is " + status);
+        }
+        this.status = everythingReturned ? SaleStatus.REFUNDED : SaleStatus.PARTIALLY_REFUNDED;
+    }
+
+    /** COMPLETED or later: money was taken and stock moved. */
+    public boolean tookMoney() {
+        return status == SaleStatus.COMPLETED || status == SaleStatus.PARTIALLY_REFUNDED
+                || status == SaleStatus.REFUNDED;
+    }
+
     /** Only a parked cart can be voided: nothing was posted and no number was used. */
     void voidCart(Instant at) {
         requireOpenCart();
