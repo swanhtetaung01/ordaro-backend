@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -42,6 +44,7 @@ import app.ordaro.shared.tenant.TenantContext;
 @PreAuthorize("hasAnyRole('OWNER', 'STOCK_MANAGER', 'CASHIER')")
 class ReceivableController {
 
+    @Schema(name = "ReceivableSettlementView")
     record SettlementView(UUID id, BigDecimal amount, PaymentMethod method, UUID locationId, UUID cashierShiftId,
             String referenceNo, Instant paidAt, String note) {
 
@@ -73,6 +76,7 @@ class ReceivableController {
             @Size(max = 100) String idempotencyKey) {
     }
 
+    @Schema(name = "ManualReceivableRequest")
     record ManualRequest(@NotNull UUID customerId, @NotNull UUID locationId, @NotNull BigDecimal amount,
             Instant issuedAt, LocalDate dueDate, @Size(max = 500) String note) {
     }

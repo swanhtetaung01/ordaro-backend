@@ -5,12 +5,21 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,6 +91,19 @@ public class SaleService {
 
     /** {@code replayed}: the idempotency key matched an earlier sale, returned unchanged. */
     public record CompletionResult(SaleDetails details, boolean replayed) {
+    }
+
+    /** One row of the sales log or the held-cart list: no lines, no payments. */
+    public record SaleSummary(Sale sale, String customerName, long lineCount) {
+    }
+
+    /**
+     * What to list. {@code statuses} empty means every status; a null location or customer means
+     * any; {@code from}/{@code to} bound the business time (a cart's creation time, a completed
+     * sale's {@code soldAt}).
+     */
+    public record SaleQuery(Set<SaleStatus> statuses, UUID locationId, UUID customerId, Instant from, Instant to,
+            int limit) {
     }
 
     private final SaleRepository sales;
@@ -268,6 +290,63 @@ public class SaleService {
     }
 
     // ───────────────────────────────────────────────────────────── reads
+
+    /**
+     * The sales log and the held-cart list (newest first). A session scoped to one location only
+     * ever sees that location, whatever the query asks for.
+     */
+    public List<SaleSummary> search(SaleQuery query) {
+        UUID scope = TenantContext.current().map(TenantContext.Current::locationScope).orElse(null);
+        UUID locationId = scope != null ? scope : query.locationId();
+        if (scope != null && query.locationId() != null) {
+            TenantContext.requireLocationInScope(query.locationId());
+        }
+        Specification<Sale> where = (root, criteria, builder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (query.statuses() != null && !query.statuses().isEmpty()) {
+                predicates.add(root.get("status").in(query.statuses()));
+            }
+            if (locationId != null) {
+                predicates.add(builder.equal(root.get("locationId"), locationId));
+            }
+            if (query.customerId() != null) {
+                predicates.add(builder.equal(root.get("customerId"), query.customerId()));
+            }
+            // a completed sale is filed under its business time; a parked cart under its creation
+            Expression<Instant> when = builder.coalesce(root.get("soldAt"), root.get("createdAt"));
+            if (query.from() != null) {
+                predicates.add(builder.greaterThanOrEqualTo(when, query.from()));
+            }
+            if (query.to() != null) {
+                predicates.add(builder.lessThan(when, query.to()));
+            }
+            return builder.and(predicates.toArray(new Predicate[0]));
+        };
+        List<Sale> found = sales.findAll(where, PageRequest.of(0, Math.clamp(query.limit(), 1, 500),
+                Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+        if (found.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Long> counts = lines.countLines(found.stream().map(Sale::getId).toList()).stream()
+                .collect(Collectors.toMap(LineCount::saleId, LineCount::lines));
+        Map<UUID, String> names = customerNames(found.stream().map(Sale::getCustomerId).filter(Objects::nonNull)
+                .distinct().toList());
+        return found.stream().map(s -> new SaleSummary(s, names.get(s.getCustomerId()),
+                counts.getOrDefault(s.getId(), 0L))).toList();
+    }
+
+    /** The customer's name for a receipt, or null for a walk-in. */
+    public String customerNameOf(Sale sale) {
+        return sale.getCustomerId() == null ? null
+                : customers.findById(sale.getCustomerId()).map(Customer::getName).orElse(null);
+    }
+
+    /** A HashMap, not Map.of: walk-in rows look their name up under a null id. */
+    private Map<UUID, String> customerNames(List<UUID> customerIds) {
+        Map<UUID, String> names = new HashMap<>();
+        customers.findAllById(customerIds).forEach(c -> names.put(c.getId(), c.getName()));
+        return names;
+    }
 
     public SaleDetails find(UUID saleId) {
         Sale sale = sales.findById(saleId).orElseThrow(SaleService::notFound);
