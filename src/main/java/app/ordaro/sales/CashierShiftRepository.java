@@ -53,4 +53,11 @@ public interface CashierShiftRepository extends JpaRepository<CashierShift, UUID
             select coalesce(sum(r.refundAmount), 0) from SaleReturn r
             where r.cashierShiftId = :shift and r.refundMethod = app.ordaro.sales.PaymentMethod.CASH""")
     BigDecimal cashRefunded(@Param("shift") UUID shiftId);
+
+    /** CASH expenses paid out of this drawer, void ones excluded. */
+    @Query("""
+            select coalesce(sum(e.amount), 0) from Expense e
+            where e.cashierShiftId = :shift and e.voidedAt is null
+              and e.method = app.ordaro.finance.ExpenseMethod.CASH""")
+    BigDecimal cashSpent(@Param("shift") UUID shiftId);
 }
