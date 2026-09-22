@@ -49,7 +49,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login", "/auth/refresh",
                                 "/auth/logout", "/auth/pin").permitAll()
                         .requestMatchers(HttpMethod.GET, "/auth/register/staff").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json", "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json", "/actuator/health",
+                                "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/auth/**").hasAnyAuthority(USER_SESSION, PICKER_SESSION)
                         .anyRequest().hasAuthority(TENANT_SESSION))
