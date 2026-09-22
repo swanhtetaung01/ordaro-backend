@@ -41,4 +41,10 @@ public interface CashierShiftRepository extends JpaRepository<CashierShift, UUID
             select coalesce(sum(r.amount), 0) from ReceivableSettlement r
             where r.cashierShiftId = :shift and r.method = app.ordaro.sales.PaymentMethod.CASH""")
     BigDecimal cashCollected(@Param("shift") UUID shiftId);
+
+    /** CASH paid to suppliers out of this drawer. */
+    @Query("""
+            select coalesce(sum(p.amount), 0) from PayableSettlement p
+            where p.cashierShiftId = :shift and p.method = app.ordaro.sales.PaymentMethod.CASH""")
+    BigDecimal cashPaidToSuppliers(@Param("shift") UUID shiftId);
 }

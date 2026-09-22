@@ -61,6 +61,12 @@ public final class Api {
         return JsonPath.read(body, "$.id");
     }
 
+    /** A product with no stock yet. */
+    public String product(Owner owner, String name, int retailPrice) throws Exception {
+        return read(call(json(post("/products"), "{\"name\":\"%s\",\"unit\":\"PIECE\",\"retailPrice\":%d}"
+                .formatted(name, retailPrice)), owner.token()).andExpect(status().isCreated()), "$.id");
+    }
+
     public String openShift(Owner owner, int openingFloat) throws Exception {
         return read(call(json(post("/shifts"), "{\"locationId\":\"%s\",\"openingFloat\":%d}"
                 .formatted(owner.mainLocationId(), openingFloat)), owner.token())

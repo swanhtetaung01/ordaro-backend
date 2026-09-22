@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import app.ordaro.catalog.Product;
 import app.ordaro.catalog.ProductRepository;
 import app.ordaro.catalog.SupplierRepository;
+import app.ordaro.finance.PayableService;
+import app.ordaro.finance.PayableService.ReceivedLine;
 import app.ordaro.inventory.StockLedger.Cost;
 import app.ordaro.inventory.StockLedger.Entry;
 import app.ordaro.org.Location;
@@ -28,7 +30,8 @@ import app.ordaro.shared.web.ApiException;
 
 /**
  * Stock documents (spec §5): save a draft, post it, void it. Posting and voiding lock the header
- * first and hand every movement to {@link StockLedger} in the same transaction.
+ * first and hand every movement to {@link StockLedger} in the same transaction. A STOCK_IN from a
+ * supplier opens a payable when posted and cancels it when voided unpaid (spec §7).
  */
 @Service
 public class StockDocumentService {
@@ -58,12 +61,13 @@ public class StockDocumentService {
     private final SupplierRepository suppliers;
     private final OrganizationRepository organizations;
     private final DocumentNumbers numbers;
+    private final PayableService payables;
     private final Clock clock;
 
     public StockDocumentService(StockDocumentRepository documents, StockDocumentLineRepository lines,
             StockMovementRepository movements, StockLedger ledger, LocationRepository locations,
             ProductRepository products, SupplierRepository suppliers, OrganizationRepository organizations,
-            DocumentNumbers numbers, Clock clock) {
+            DocumentNumbers numbers, PayableService payables, Clock clock) {
         this.documents = documents;
         this.lines = lines;
         this.movements = movements;
@@ -73,6 +77,7 @@ public class StockDocumentService {
         this.suppliers = suppliers;
         this.organizations = organizations;
         this.numbers = numbers;
+        this.payables = payables;
         this.clock = clock;
     }
 
@@ -119,6 +124,11 @@ public class StockDocumentService {
 
         ledger.post(entries(document, number, documentLines));
         document.markPosted(number, clock.instant());
+        if (document.getType() == StockDocumentType.STOCK_IN && document.getSupplierId() != null) {
+            payables.openForStockIn(document.getId(), number, document.getSupplierId(), document.getLocationId(),
+                    documentLines.stream().map(l -> new ReceivedLine(l.getQuantity(), l.getUnitCost())).toList(),
+                    document.getPostedAt());
+        }
         return new DocumentWithLines(document, documentLines);
     }
 
@@ -126,7 +136,8 @@ public class StockDocumentService {
      * POSTED → VOID writes, for each original movement, one of the opposite sign at the balance's
      * <em>current</em> average, reason VOID_REVERSAL (spec §5). Deliberately not an exact undo. A
      * reversal that would take stock below zero is refused like any other outflow. DRAFT → VOID
-     * writes nothing. The Payable rule for a voided STOCK_IN arrives with finance (step 5).
+     * writes nothing. A voided STOCK_IN cancels its payable if nothing was paid, and is refused if
+     * something was (spec §7; §12 Step 5 as built).
      */
     @Transactional
     public DocumentWithLines voidDocument(UUID documentId) {
@@ -135,6 +146,9 @@ public class StockDocumentService {
             throw ApiException.conflict("document_void", "the document is already void");
         }
         if (document.getStatus() == StockDocumentStatus.POSTED) {
+            if (document.getType() == StockDocumentType.STOCK_IN) {
+                payables.cancelForStockInVoid(documentId);
+            }
             List<StockMovement> original = movements.findByReference(StockReferenceType.STOCK_DOCUMENT, documentId);
             List<Entry> reversals = new ArrayList<>(original.size());
             Instant now = clock.instant();

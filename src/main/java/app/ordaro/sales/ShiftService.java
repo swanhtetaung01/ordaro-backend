@@ -20,7 +20,7 @@ import app.ordaro.shared.web.ApiException;
  * sales + Σ CASH receivable repayments − Σ CASH refunds − Σ CASH expenses − Σ CASH payable
  * settlements}, each counting only when its own {@code cashierShiftId} is this shift. Repayments
  * are an addition to the spec's formula (§12 Step 5 as built): cash a debtor hands over at the
- * register is in the drawer. Refunds, expenses and payable settlements join in steps 5b–5d.
+ * register is in the drawer. Refunds and expenses join in steps 5c and 5d.
  */
 @Service
 public class ShiftService {
@@ -30,7 +30,7 @@ public class ShiftService {
 
     /** Where the expected cash comes from, line by line: what the close screen shows. */
     public record Drawer(BigDecimal openingFloat, BigDecimal cashSales, BigDecimal cashRepayments,
-            BigDecimal expectedCash) {
+            BigDecimal cashSupplierPayments, BigDecimal expectedCash) {
     }
 
     private final CashierShiftRepository shifts;
@@ -82,8 +82,9 @@ public class ShiftService {
     private Drawer drawerOf(CashierShift shift) {
         BigDecimal sales = shifts.cashTaken(shift.getId(), TOOK_MONEY);
         BigDecimal repayments = shifts.cashCollected(shift.getId());
-        return new Drawer(shift.getOpeningFloat(), sales, repayments,
-                shift.getOpeningFloat().add(sales).add(repayments));
+        BigDecimal suppliers = shifts.cashPaidToSuppliers(shift.getId());
+        return new Drawer(shift.getOpeningFloat(), sales, repayments, suppliers,
+                shift.getOpeningFloat().add(sales).add(repayments).subtract(suppliers));
     }
 
     /**

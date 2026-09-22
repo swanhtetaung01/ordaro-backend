@@ -32,7 +32,7 @@ public class StockDocument extends TenantEntity {
     @Column(name = "counterparty_location_id")
     private UUID counterpartyLocationId;
 
-    /** STOCK_IN only. The Payable it creates arrives with finance (step 5). */
+    /** STOCK_IN only. Posting opens a payable to this supplier (spec §7). */
     @Column(name = "supplier_id")
     private UUID supplierId;
 
