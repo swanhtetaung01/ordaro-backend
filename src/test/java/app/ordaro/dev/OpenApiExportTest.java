@@ -9,11 +9,13 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import app.ordaro.support.IntegrationTest;
 
 /** Writes the live OpenAPI document so ordaro-web can generate its client. */
+@TestPropertySource(properties = "springdoc.api-docs.enabled=true")
 class OpenApiExportTest extends IntegrationTest {
 
     @Autowired
