@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -72,10 +73,15 @@ class TenantIsolationTest extends IntegrationTest {
         assertThat(inTransaction(() -> products.findAll())).isEmpty();
     }
 
+    /**
+     * Two layers refuse it: {@code @TenantId} writes the nil UUID, which no organization owns, and
+     * since step 6 row-level security refuses the row before the foreign key is even checked.
+     */
     @Test
     void withoutATenantNothingCanBeWritten() {
         assertThatThrownBy(() -> inTransaction(() -> locations.save(new Location("X", "X", LocationType.STORE))))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOfAny(DataIntegrityViolationException.class, JpaSystemException.class)
+                .hasMessageContaining("row-level security");
     }
 
     @Test

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import app.ordaro.auth.DeviceCheck.DeviceSnapshot;
 import app.ordaro.auth.TokenService.IssuedTokens;
 import app.ordaro.org.MembershipRole;
+import app.ordaro.shared.tenant.TenantSession;
 import app.ordaro.shared.web.ApiException;
 
 /**
@@ -45,15 +46,17 @@ public class PinLoginService {
     private final PinHasher pins;
     private final TokenService tokens;
     private final JdbcTemplate jdbc;
+    private final TenantSession tenant;
     private final Clock clock;
 
     public PinLoginService(DeviceCheck devices, MembershipDirectory memberships, PinHasher pins,
-            TokenService tokens, JdbcTemplate jdbc, Clock clock) {
+            TokenService tokens, JdbcTemplate jdbc, TenantSession tenant, Clock clock) {
         this.devices = devices;
         this.memberships = memberships;
         this.pins = pins;
         this.tokens = tokens;
         this.jdbc = jdbc;
+        this.tenant = tenant;
         this.clock = clock;
     }
 
@@ -61,6 +64,8 @@ public class PinLoginService {
     @Transactional(readOnly = true)
     public List<StaffEntry> staff(String credential) {
         DeviceSnapshot device = usableDevice(credential, false);
+        // the credential named the organization; everything below is an ordinary tenant read
+        tenant.adopt(device.organizationId());
         return jdbc.query("""
                 select id, display_name, role from membership
                 where organization_id = ? and status = 'ACTIVE' and pin_hash is not null
@@ -74,6 +79,7 @@ public class PinLoginService {
     public IssuedTokens login(String credential, UUID membershipId, String pin) {
         Instant now = clock.instant();
         DeviceSnapshot device = usableDevice(credential, true);
+        tenant.adopt(device.organizationId());
         if (device.lockedUntil() != null && device.lockedUntil().isAfter(now)) {
             throw locked("register_locked", "too many wrong PINs on this register; try again later");
         }

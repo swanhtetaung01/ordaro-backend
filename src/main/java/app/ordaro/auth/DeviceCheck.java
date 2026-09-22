@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
 /**
  * Register device lookups without a tenant session: by id for the per-request check of a
  * REGISTER token (cached like memberships, evicted on revoke), and by credential hash — locked —
- * for PIN login. Both are deliberate unscoped native reads keyed by an unguessable value.
+ * for PIN login. Both run before a tenant is known, so they go through the {@code ordaro.auth_*}
+ * SECURITY DEFINER functions of V9 (spec §12 RLS), keyed by an id or an unguessable credential.
  */
 @Component
 public class DeviceCheck {
@@ -31,10 +32,9 @@ public class DeviceCheck {
     private record Entry(Optional<DeviceSnapshot> device, Instant loadedAt) {
     }
 
-    private static final String COLUMNS = """
-            select id, organization_id, location_id, status, expires_at, failed_pin_count, locked_until
-            from register_device
-            """;
+    private static final String BY_ID = "select * from ordaro.auth_register_device(?)";
+
+    private static final String BY_CREDENTIAL = "select * from ordaro.auth_register_device_by_credential(?, ?)";
 
     private final JdbcTemplate jdbc;
     private final Clock clock;
@@ -52,7 +52,7 @@ public class DeviceCheck {
         Instant now = clock.instant();
         Entry entry = cache.get(deviceId);
         if (entry == null || !entry.loadedAt().plus(ttl).isAfter(now)) {
-            entry = new Entry(load(COLUMNS + "where id = ?", deviceId), now);
+            entry = new Entry(load(BY_ID, deviceId), now);
             if (!ttl.isZero()) {
                 cache.put(deviceId, entry);
             }
@@ -62,28 +62,28 @@ public class DeviceCheck {
 
     /** For the register's staff list: no lock. */
     public Optional<DeviceSnapshot> findByCredential(String credential) {
-        return load(COLUMNS + "where credential_hash = ?", Secrets.sha256Hex(credential));
+        return load(BY_CREDENTIAL, Secrets.sha256Hex(credential), false);
     }
 
     /** For PIN login: the device row is locked for the rest of the transaction. */
     public Optional<DeviceSnapshot> lockByCredential(String credential) {
-        return load(COLUMNS + "where credential_hash = ? for update", Secrets.sha256Hex(credential));
+        return load(BY_CREDENTIAL, Secrets.sha256Hex(credential), true);
     }
 
     /** Uncached, for refresh: a revoked register must not renew a session. */
     public Optional<DeviceSnapshot> lockByIdForRefresh(UUID deviceId) {
-        return deviceId == null ? Optional.empty() : load(COLUMNS + "where id = ?", deviceId);
+        return deviceId == null ? Optional.empty() : load(BY_ID, deviceId);
     }
 
     public void evict(UUID deviceId) {
         cache.remove(deviceId);
     }
 
-    private Optional<DeviceSnapshot> load(String sql, Object key) {
+    private Optional<DeviceSnapshot> load(String sql, Object... arguments) {
         return jdbc.query(sql, (rs, i) -> new DeviceSnapshot(rs.getObject(1, UUID.class),
                 rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
                 RegisterDeviceStatus.valueOf(rs.getString(4)), rs.getTimestamp(5).toInstant(), rs.getInt(6),
-                instant(rs.getTimestamp(7))), key).stream().findFirst();
+                instant(rs.getTimestamp(7))), arguments).stream().findFirst();
     }
 
     private static Instant instant(Timestamp timestamp) {
