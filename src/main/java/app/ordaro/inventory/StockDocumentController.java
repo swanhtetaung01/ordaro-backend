@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import app.ordaro.finance.Payable;
+import app.ordaro.finance.PayableService;
 import app.ordaro.inventory.StockDocumentService.DocumentCommand;
 import app.ordaro.inventory.StockDocumentService.DocumentWithLines;
 import app.ordaro.inventory.StockDocumentService.LineCommand;
@@ -58,14 +60,15 @@ class StockDocumentController {
             StockMovementReason reason) {
     }
 
+    /** {@code payableId}: the supplier debt a posted STOCK_IN opened, if it cost anything. */
     record DocumentView(UUID id, StockDocumentType type, StockDocumentStatus status, String documentNumber,
-            UUID locationId, UUID counterpartyLocationId, UUID supplierId, Instant occurredAt, String note,
-            Instant postedAt, Instant voidedAt, List<LineView> lines) {
+            UUID locationId, UUID counterpartyLocationId, UUID supplierId, UUID payableId, Instant occurredAt,
+            String note, Instant postedAt, Instant voidedAt, List<LineView> lines) {
 
-        static DocumentView of(DocumentWithLines d) {
+        static DocumentView of(DocumentWithLines d, UUID payableId) {
             StockDocument h = d.document();
             return new DocumentView(h.getId(), h.getType(), h.getStatus(), h.getDocumentNumber(), h.getLocationId(),
-                    h.getCounterpartyLocationId(), h.getSupplierId(), h.getOccurredAt(), h.getNote(),
+                    h.getCounterpartyLocationId(), h.getSupplierId(), payableId, h.getOccurredAt(), h.getNote(),
                     h.getPostedAt(), h.getVoidedAt(), d.lines().stream()
                             .map(l -> new LineView(l.getPosition(), l.getProductId(), l.getQuantity(),
                                     l.getUnitCost(), l.getReason()))
@@ -79,10 +82,13 @@ class StockDocumentController {
 
     private final StockDocumentService service;
     private final StockDocumentRepository documents;
+    private final PayableService payables;
 
-    StockDocumentController(StockDocumentService service, StockDocumentRepository documents) {
+    StockDocumentController(StockDocumentService service, StockDocumentRepository documents,
+            PayableService payables) {
         this.service = service;
         this.documents = documents;
+        this.payables = payables;
     }
 
     @GetMapping
@@ -95,13 +101,13 @@ class StockDocumentController {
 
     @GetMapping("/{id}")
     DocumentView get(@PathVariable UUID id) {
-        return DocumentView.of(service.find(id));
+        return view(service.find(id));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     DocumentView create(@Valid @RequestBody DocumentRequest request) {
-        return DocumentView.of(request.postNow()
+        return view(request.postNow()
                 ? service.createAndPost(request.command())
                 : service.createDraft(request.command()));
     }
@@ -110,16 +116,23 @@ class StockDocumentController {
     @PutMapping("/{id}")
     DocumentView replaceDraft(@PathVariable UUID id, @Valid @RequestBody DocumentRequest request) {
         DocumentWithLines draft = service.replaceDraft(id, request.command());
-        return DocumentView.of(request.postNow() ? service.post(id) : draft);
+        return view(request.postNow() ? service.post(id) : draft);
     }
 
     @PostMapping("/{id}/post")
     DocumentView post(@PathVariable UUID id) {
-        return DocumentView.of(service.post(id));
+        return view(service.post(id));
     }
 
     @PostMapping("/{id}/void")
     DocumentView voidDocument(@PathVariable UUID id) {
-        return DocumentView.of(service.voidDocument(id));
+        return view(service.voidDocument(id));
+    }
+
+    private DocumentView view(DocumentWithLines d) {
+        Payable payable = d.document().getType() == StockDocumentType.STOCK_IN
+                ? payables.forStockDocument(d.document().getId())
+                : null;
+        return DocumentView.of(d, payable == null ? null : payable.getId());
     }
 }
