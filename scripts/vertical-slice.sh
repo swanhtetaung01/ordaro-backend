@@ -5,6 +5,7 @@
 #   plus: login → token → request; a wrong-tenant request; a PIN register session.
 #
 # Usage: BASE=http://localhost:8080 scripts/vertical-slice.sh
+#        (a server with ORDARO_SIGNUP_CODE set: SIGNUP_CODE=that-code BASE=… scripts/vertical-slice.sh)
 # Needs curl and python3 (for JSON field extraction; no jq dependency). Every step asserts its
 # HTTP status and the values that matter; the script exits non-zero on the first failure.
 set -euo pipefail
@@ -38,7 +39,7 @@ call GET /actuator/health
 expect "$STATUS" 200 "health status"
 
 say "Sign up shop A (account + organization + owner + default STORE, one transaction)"
-call POST /auth/signup "" "{\"phone\":\"$PHONE_A\",\"password\":\"$PASSWORD\",\"fullName\":\"Daw Slice\",\"businessName\":\"Slice Mart $RUN\"}"
+call POST /auth/signup "" "{\"phone\":\"$PHONE_A\",\"password\":\"$PASSWORD\",\"fullName\":\"Daw Slice\",\"businessName\":\"Slice Mart $RUN\",\"signupCode\":\"${SIGNUP_CODE:-}\"}"
 expect "$STATUS" 201 "signup status"
 expect "$(echo "$BODY_OUT" | j "d['kind']")" USER "token kind"
 A_REFRESH=$(echo "$BODY_OUT" | j "d['refreshToken']")
@@ -106,7 +107,7 @@ call GET /inventory/verification "$A"
 expect "$(echo "$BODY_OUT" | j "len(d['mismatches'])")" 0 "rebuild job finds no drift"
 
 say "Wrong-tenant request: shop B cannot see A's sale, product or document"
-call POST /auth/signup "" "{\"phone\":\"$PHONE_B\",\"password\":\"$PASSWORD\",\"fullName\":\"Ko Other\",\"businessName\":\"Other Shop $RUN\"}"
+call POST /auth/signup "" "{\"phone\":\"$PHONE_B\",\"password\":\"$PASSWORD\",\"fullName\":\"Ko Other\",\"businessName\":\"Other Shop $RUN\",\"signupCode\":\"${SIGNUP_CODE:-}\"}"
 expect "$STATUS" 201 "signup shop B"
 B=$(echo "$BODY_OUT" | j "d['accessToken']")
 call GET "/sales/$SALE" "$B";      expect "$STATUS" 404 "B reads A's sale"

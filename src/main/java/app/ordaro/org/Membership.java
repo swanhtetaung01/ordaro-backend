@@ -136,6 +136,11 @@ public class Membership extends TenantEntity {
         return pinHash;
     }
 
+    /** An owner sets or resets the 6-digit register PIN (hashed by the caller). */
+    public void changePinHash(String pinHash) {
+        this.pinHash = pinHash;
+    }
+
     public MembershipStatus getStatus() {
         return status;
     }

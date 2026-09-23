@@ -50,6 +50,13 @@ public class Organization extends BaseEntity {
     @Column(name = "timezone", nullable = false, length = 64)
     private String timezone;
 
+    /** What a new customer's credit limit starts at (V10); 0 means no credit until the owner sets one. */
+    @Column(name = "default_credit_limit", nullable = false, precision = 19, scale = 4)
+    private BigDecimal defaultCreditLimit = BigDecimal.ZERO;
+
+    @Column(name = "default_credit_term_days", nullable = false)
+    private int defaultCreditTermDays;
+
     protected Organization() {
     }
 
@@ -133,6 +140,22 @@ public class Organization extends BaseEntity {
 
     public CostingMethod getCostingMethod() {
         return costingMethod;
+    }
+
+    public BigDecimal getDefaultCreditLimit() {
+        return defaultCreditLimit;
+    }
+
+    public void setDefaultCreditLimit(BigDecimal defaultCreditLimit) {
+        this.defaultCreditLimit = defaultCreditLimit;
+    }
+
+    public int getDefaultCreditTermDays() {
+        return defaultCreditTermDays;
+    }
+
+    public void setDefaultCreditTermDays(int defaultCreditTermDays) {
+        this.defaultCreditTermDays = defaultCreditTermDays;
     }
 
     public String getTimezone() {

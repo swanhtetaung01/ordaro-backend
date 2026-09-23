@@ -7,6 +7,8 @@ import java.util.UUID;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -28,19 +30,23 @@ class OrganizationController {
 
     record OrganizationView(UUID id, String name, String slug, BusinessType businessType, String currencyCode,
             boolean taxInclusivePricing, BigDecimal defaultTaxRate, BigDecimal roundTotalToNearest,
-            boolean allowNegativeStock, CostingMethod costingMethod, String timezone) {
+            boolean allowNegativeStock, CostingMethod costingMethod, String timezone, BigDecimal defaultCreditLimit,
+            int defaultCreditTermDays) {
 
         static OrganizationView of(Organization o) {
             return new OrganizationView(o.getId(), o.getName(), o.getSlug(), o.getBusinessType(),
                     o.getCurrencyCode(), o.isTaxInclusivePricing(), o.getDefaultTaxRate(),
-                    o.getRoundTotalToNearest(), o.isAllowNegativeStock(), o.getCostingMethod(), o.getTimezone());
+                    o.getRoundTotalToNearest(), o.isAllowNegativeStock(), o.getCostingMethod(), o.getTimezone(),
+                    o.getDefaultCreditLimit(), o.getDefaultCreditTermDays());
         }
     }
 
+    /** {@code defaultCreditLimit}/{@code defaultCreditTermDays}: what new customers start with. */
     record OrganizationUpdate(@Size(min = 1, max = 200) String name, BusinessType businessType,
             @Pattern(regexp = "[A-Z]{3}") String currencyCode, Boolean taxInclusivePricing,
             @DecimalMin("0") BigDecimal defaultTaxRate, @DecimalMin(value = "0", inclusive = false)
-            BigDecimal roundTotalToNearest, Boolean allowNegativeStock, @Size(min = 1, max = 64) String timezone) {
+            BigDecimal roundTotalToNearest, Boolean allowNegativeStock, @Size(min = 1, max = 64) String timezone,
+            @DecimalMin("0") BigDecimal defaultCreditLimit, @Min(0) @Max(365) Integer defaultCreditTermDays) {
     }
 
     private final OrganizationRepository organizations;
@@ -79,6 +85,12 @@ class OrganizationController {
         }
         if (update.allowNegativeStock() != null) {
             o.setAllowNegativeStock(update.allowNegativeStock());
+        }
+        if (update.defaultCreditLimit() != null) {
+            o.setDefaultCreditLimit(update.defaultCreditLimit());
+        }
+        if (update.defaultCreditTermDays() != null) {
+            o.setDefaultCreditTermDays(update.defaultCreditTermDays());
         }
         if (update.timezone() != null) {
             try {
