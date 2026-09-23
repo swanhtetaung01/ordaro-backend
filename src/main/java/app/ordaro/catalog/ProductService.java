@@ -12,7 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import app.ordaro.inventory.StockDocumentService;
 import app.ordaro.inventory.StockDocumentService.OpeningStock;
+import app.ordaro.org.BusinessType;
 import app.ordaro.org.LocationRepository;
+import app.ordaro.org.OrganizationRepository;
+import app.ordaro.shared.tenant.TenantContext;
 import app.ordaro.shared.web.ApiException;
 
 @Service
@@ -35,11 +38,13 @@ public class ProductService {
     private final LocationRepository locations;
     private final LocationProductRepository locationProducts;
     private final StockDocumentService stockDocuments;
+    private final OrganizationRepository organizations;
     private final Clock clock;
 
     public ProductService(ProductRepository products, ProductBarcodeRepository barcodes,
             CategoryRepository categories, SupplierRepository suppliers, LocationRepository locations,
-            LocationProductRepository locationProducts, StockDocumentService stockDocuments, Clock clock) {
+            LocationProductRepository locationProducts, StockDocumentService stockDocuments,
+            OrganizationRepository organizations, Clock clock) {
         this.products = products;
         this.barcodes = barcodes;
         this.categories = categories;
@@ -47,6 +52,7 @@ public class ProductService {
         this.locations = locations;
         this.locationProducts = locationProducts;
         this.stockDocuments = stockDocuments;
+        this.organizations = organizations;
         this.clock = clock;
     }
 
@@ -69,6 +75,11 @@ public class ProductService {
         Product product = new Product(sku, command.name(), command.unit(), command.retailPrice());
         if (command.id() != null) {
             product.withId(command.id());
+        }
+        // an online shop sells what it lists online unless told otherwise
+        if (command.sellOnline() == null && organizations.findById(TenantContext.requireOrganizationId())
+                .map(o -> o.getBusinessType() == BusinessType.ONLINE).orElse(false)) {
+            product.setSellOnline(true);
         }
         apply(product, command);
         product = products.save(product);

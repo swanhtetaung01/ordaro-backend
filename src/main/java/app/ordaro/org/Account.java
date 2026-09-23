@@ -36,6 +36,13 @@ public class Account extends BaseEntity {
     @Column(name = "login_disabled_reason", length = 32)
     private LoginDisabledReason loginDisabledReason;
 
+    /** Written only by atomic updates ({@code LoginAttempts}), never by the entity. */
+    @Column(name = "failed_login_count", insertable = false, updatable = false)
+    private int failedLoginCount;
+
+    @Column(name = "login_locked_until", insertable = false, updatable = false)
+    private Instant loginLockedUntil;
+
     protected Account() {
     }
 
@@ -48,6 +55,14 @@ public class Account extends BaseEntity {
 
     public boolean canLogIn() {
         return status == AccountStatus.ACTIVE && loginDisabledReason == null;
+    }
+
+    public boolean isLoginLocked(Instant now) {
+        return loginLockedUntil != null && loginLockedUntil.isAfter(now);
+    }
+
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public boolean isPhoneVerified() {
@@ -76,5 +91,9 @@ public class Account extends BaseEntity {
 
     public LoginDisabledReason getLoginDisabledReason() {
         return loginDisabledReason;
+    }
+
+    public Instant getLoginLockedUntil() {
+        return loginLockedUntil;
     }
 }

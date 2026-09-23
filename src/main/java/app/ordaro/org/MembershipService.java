@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.UUID;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,15 +39,18 @@ public class MembershipService {
     private final AccountRepository accounts;
     private final PinHasher pins;
     private final MembershipCheck membershipCheck;
+    private final JdbcTemplate jdbc;
     private final Clock clock;
 
     public MembershipService(MembershipRepository memberships, LocationRepository locations,
-            AccountRepository accounts, PinHasher pins, MembershipCheck membershipCheck, Clock clock) {
+            AccountRepository accounts, PinHasher pins, MembershipCheck membershipCheck, JdbcTemplate jdbc,
+            Clock clock) {
         this.memberships = memberships;
         this.locations = locations;
         this.accounts = accounts;
         this.pins = pins;
         this.membershipCheck = membershipCheck;
+        this.jdbc = jdbc;
         this.clock = clock;
     }
 
@@ -81,6 +85,23 @@ public class MembershipService {
         Membership invited = Membership.invitedByCode(command.displayName(), command.role(), command.locationId(),
                 phone, Secrets.sha256Hex(code), clock.instant().plus(INVITE_TTL));
         return new InviteResult(memberships.save(invited), code);
+    }
+
+    /**
+     * Sets a new register PIN — for the cashier who forgot theirs. Their PIN lockouts on every
+     * register are cleared, since the owner has just vouched for them.
+     */
+    @Transactional
+    public Membership setPin(UUID membershipId, String pin) {
+        Membership membership = memberships.findById(membershipId)
+                .orElseThrow(() -> ApiException.notFound("membership_not_found", "no such membership"));
+        if (membership.getStatus() == MembershipStatus.REMOVED) {
+            throw ApiException.badRequest("membership_removed", "a removed membership has no PIN");
+        }
+        membership.changePinHash(pins.hash(pin));
+        jdbc.update("delete from register_pin_lockout where membership_id = ?", membershipId);
+        membershipCheck.evict(membershipId);
+        return membership;
     }
 
     @Transactional

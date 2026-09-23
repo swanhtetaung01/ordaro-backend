@@ -1,5 +1,6 @@
 package app.ordaro.auth;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -42,7 +43,9 @@ public class SecurityConfig {
     /** Authority for a picker session: an account with no tenant chosen yet. */
     public static final String PICKER_SESSION = "KIND_PICKER";
 
+    /** Web only: the admin command line ({@code admin …}) starts without a web server. */
     @Bean
+    @ConditionalOnWebApplication
     SecurityFilterChain api(HttpSecurity http, JwtDecoder jwtDecoder, MembershipCheck membershipCheck,
             DeviceCheck deviceCheck, ProblemAccessHandler problems) throws Exception {
         http.csrf(csrf -> csrf.disable())

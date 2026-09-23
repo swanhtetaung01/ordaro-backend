@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -48,6 +49,9 @@ class MembershipController {
     record StatusChange(@NotNull MembershipStatus status) {
     }
 
+    record PinChange(@NotBlank String pin) {
+    }
+
     private final MembershipRepository memberships;
     private final MembershipService service;
 
@@ -72,5 +76,11 @@ class MembershipController {
     @PatchMapping("/{id}")
     MembershipView changeStatus(@PathVariable UUID id, @Valid @RequestBody StatusChange request) {
         return MembershipView.of(service.changeStatus(id, request.status()));
+    }
+
+    /** Set or reset someone's 6-digit register PIN. */
+    @PutMapping("/{id}/pin")
+    MembershipView setPin(@PathVariable UUID id, @Valid @RequestBody PinChange request) {
+        return MembershipView.of(service.setPin(id, request.pin()));
     }
 }

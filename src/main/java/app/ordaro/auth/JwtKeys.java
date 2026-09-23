@@ -1,7 +1,9 @@
 package app.ordaro.auth;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.text.ParseException;
 import java.util.Map;
 import java.util.UUID;
@@ -57,7 +59,11 @@ public class JwtKeys {
                 log.warn("ordaro.jwt.keys-file is not set: using an ephemeral signing key; tokens die on restart");
                 return new JWKSet(generate());
             }
-            JWKSet set = JWKSet.load(Path.of(keysFile).toFile());
+            Path path = Path.of(keysFile);
+            if (!Files.exists(path)) {
+                return create(path);
+            }
+            JWKSet set = JWKSet.load(path.toFile());
             if (set.getKeys().isEmpty() || !(set.getKeys().getFirst() instanceof ECKey key) || !key.isPrivate()) {
                 throw new IllegalStateException("the first key in " + keysFile + " must be a private EC key");
             }
@@ -65,6 +71,26 @@ public class JwtKeys {
         } catch (IOException | ParseException e) {
             throw new IllegalStateException("cannot read JWT keys from " + keysFile, e);
         }
+    }
+
+    /**
+     * First start with a configured path: mint a key and keep it there, so every later start —
+     * and every deploy — signs with the same key and nobody is logged out. The file holds a
+     * private key: owner-only permissions where the file system has them.
+     */
+    private static JWKSet create(Path path) throws IOException {
+        JWKSet set = new JWKSet(generate());
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+        Files.writeString(path, set.toString(false));
+        try {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
+        } catch (UnsupportedOperationException e) {
+            // Windows: no POSIX permissions; development only
+        }
+        log.info("created a new JWT signing key at {}", path);
+        return set;
     }
 
     /** A new P-256 signing key; also what an operator runs to mint a key for rotation. */

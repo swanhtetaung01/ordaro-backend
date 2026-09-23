@@ -1,0 +1,65 @@
+# Production on one server: the API, the web app and Caddy (automatic HTTPS). PostgreSQL is RDS,
+# not a container here. Run everything from this folder; see README.md for the first setup.
+#
+#   ./deploy.sh              pull both repos, back up the database, rebuild, restart
+#   docker compose ps        what is running
+#   docker compose logs -f   what it is saying
+name: ordaro
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  backend:
+    build: ..
+    image: ordaro-backend:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # created on the first start, then kept: a deploy logs nobody out
+      ORDARO_JWT_KEYS_FILE: /data/jwt-keys.json
+      ORDARO_OPENAPI: "false"
+    volumes:
+      - backend-data:/data
+    # the server itself only (admin commands, the slice); never the internet
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 900m
+    logging: *logging
+
+  web:
+    build: ${ORDARO_WEB_DIR:-../../ordaro-web}
+    image: ordaro-web:latest
+    restart: unless-stopped
+    environment:
+      ORDARO_API_URL: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 400m
+    logging: *logging
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ORDARO_DOMAIN: ${ORDARO_DOMAIN:?set ORDARO_DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    logging: *logging
+
+volumes:
+  backend-data:
+  caddy-data:
+  caddy-config:

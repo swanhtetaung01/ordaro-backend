@@ -30,7 +30,7 @@ class AuthController {
 
     record SignupRequest(@NotBlank String phone, @NotBlank @Size(min = 8, max = 128) String password,
             @NotBlank @Size(max = 200) String fullName, @NotBlank @Size(max = 200) String businessName,
-            @Size(max = 100) String deviceLabel) {
+            @Size(max = 100) String deviceLabel, @Size(max = 100) String signupCode) {
     }
 
     record LoginRequest(@NotBlank String phone, @NotBlank String password, @Size(max = 100) String deviceLabel) {
@@ -46,6 +46,10 @@ class AuthController {
     }
 
     record PinLoginRequest(@NotNull UUID membershipId, @NotBlank @Size(max = 6) String pin) {
+    }
+
+    record PasswordChange(@NotBlank String currentPassword, @NotBlank @Size(min = 8, max = 128) String newPassword,
+            @Size(max = 100) String deviceLabel) {
     }
 
     /** The register's device credential travels in this header, never in a URL. */
@@ -76,7 +80,7 @@ class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     IssuedTokens signup(@Valid @RequestBody SignupRequest request) {
         return auth.signup(new SignupCommand(request.phone(), request.password(), request.fullName(),
-                request.businessName(), request.deviceLabel()));
+                request.businessName(), request.deviceLabel(), request.signupCode()));
     }
 
     @PostMapping("/login")
@@ -104,6 +108,13 @@ class AuthController {
     @PostMapping("/switch")
     IssuedTokens switchOrganization(@Valid @RequestBody SwitchRequest request) {
         return auth.switchTo(currentAccount(), request.organizationId(), request.deviceLabel());
+    }
+
+    /** Change your own password; other sessions end, this one gets fresh tokens. */
+    @PostMapping("/password")
+    IssuedTokens changePassword(@Valid @RequestBody PasswordChange request) {
+        return auth.changePassword(currentAccount(), TenantContext.membershipId().orElse(null),
+                request.currentPassword(), request.newPassword(), request.deviceLabel());
     }
 
     @PostMapping("/invitations/accept")

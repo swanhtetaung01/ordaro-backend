@@ -1,10 +1,15 @@
 package app.ordaro.auth;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -40,8 +45,14 @@ import app.ordaro.shared.web.ApiException;
 @Service
 public class AuthService {
 
+    /** {@code signupCode}: required when the server sets one (see {@link #signup}). */
     public record SignupCommand(String phone, String password, String fullName, String businessName,
-            String deviceLabel) {
+            String deviceLabel, String signupCode) {
+
+        public SignupCommand(String phone, String password, String fullName, String businessName,
+                String deviceLabel) {
+            this(phone, password, fullName, businessName, deviceLabel, null);
+        }
     }
 
     public record LoginResult(IssuedTokens tokens, List<PickerEntry> memberships) {
@@ -58,14 +69,17 @@ public class AuthService {
     private final TokenService tokens;
     private final PasswordEncoder passwords;
     private final TransactionTemplate transaction;
+    private final LoginAttempts loginAttempts;
     private final Clock clock;
     private final String timingHash;
+    private final byte[] signupCode;
 
     public AuthService(AccountRepository accounts, OrganizationRepository organizations,
             LocationRepository locations, MembershipRepository memberships, RefreshTokenRepository refreshTokens,
             MembershipDirectory directory, MembershipCheck membershipCheck, DeviceCheck deviceCheck,
             TokenService tokens,
-            PasswordEncoder passwords, PlatformTransactionManager transactionManager, Clock clock) {
+            PasswordEncoder passwords, PlatformTransactionManager transactionManager, LoginAttempts loginAttempts,
+            @Value("${ordaro.signup.code:}") String signupCode, Clock clock) {
         this.accounts = accounts;
         this.organizations = organizations;
         this.locations = locations;
@@ -77,6 +91,9 @@ public class AuthService {
         this.tokens = tokens;
         this.passwords = passwords;
         this.transaction = new TransactionTemplate(transactionManager);
+        this.loginAttempts = loginAttempts;
+        this.signupCode = signupCode == null || signupCode.isBlank() ? null
+                : signupCode.trim().getBytes(StandardCharsets.UTF_8);
         this.clock = clock;
         this.timingHash = passwords.encode("ordaro-timing-equaliser");
     }
@@ -87,6 +104,7 @@ public class AuthService {
      * the session opens.
      */
     public IssuedTokens signup(SignupCommand command) {
+        requireSignupCode(command.signupCode());
         String phone = Phones.normalize(command.phone());
         UUID organizationId = UuidV7Generator.newId();
         return TenantContext.call(new TenantContext.Current(organizationId, null, null),
@@ -105,17 +123,29 @@ public class AuthService {
                 }));
     }
 
-    /** One ACTIVE membership signs straight in; otherwise a picker token and the list. */
-    @Transactional
+    /**
+     * One ACTIVE membership signs straight in; otherwise a picker token and the list. Ten wrong
+     * passwords in a row lock the account's login for fifteen minutes; the count must commit
+     * even though the login fails, hence {@code noRollbackFor}.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
     public LoginResult login(String phone, String password, String deviceLabel) {
         Account account = accounts.findByPhone(Phones.normalize(phone)).orElse(null);
         if (account == null) {
             passwords.matches(password, timingHash);
             throw invalidCredentials();
         }
+        Instant now = clock.instant();
+        if (account.isLoginLocked(now)) {
+            long minutes = Math.max(1, Duration.between(now, account.getLoginLockedUntil()).toMinutes() + 1);
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "login_locked",
+                    "too many wrong passwords; try again in " + minutes + " minutes");
+        }
         if (!passwords.matches(password, account.getPasswordHash())) {
+            loginAttempts.recordFailure(account.getId(), now);
             throw invalidCredentials();
         }
+        loginAttempts.clear(account.getId());
         if (!account.canLogIn()) {
             throw ApiException.forbidden("account_disabled", "this account cannot log in");
         }
@@ -196,6 +226,30 @@ public class AuthService {
         return tokens.forRegister(membership, device, token.getFamilyId());
     }
 
+    /**
+     * A signed-in person changes their own password. Every session of the account ends — the
+     * other phones and browsers are logged out — and this one gets fresh tokens, so it carries on.
+     */
+    @Transactional
+    public IssuedTokens changePassword(UUID accountId, UUID membershipId, String currentPassword,
+            String newPassword, String deviceLabel) {
+        Account account = activeAccount(requireAccount(accountId));
+        if (!passwords.matches(currentPassword, account.getPasswordHash())) {
+            // 400, not 401: the session is fine, only the password typed is wrong
+            throw ApiException.badRequest("wrong_password", "the current password is not right");
+        }
+        account.changePasswordHash(passwords.encode(newPassword));
+        refreshTokens.revokeAllForAccount(account.getId(), clock.instant());
+        loginAttempts.clear(account.getId());
+        if (membershipId == null) {
+            return tokens.forPicker(account.getId(), null, deviceLabel);
+        }
+        MembershipSnapshot membership = directory.find(membershipId)
+                .filter(m -> account.getId().equals(m.accountId()))
+                .orElseThrow(() -> ApiException.forbidden("no_active_membership", "no active membership"));
+        return tokens.forMembership(account.getId(), membership, null, deviceLabel);
+    }
+
     @Transactional
     public void logout(String rawToken) {
         refreshTokens.findByTokenHash(Secrets.sha256Hex(rawToken))
@@ -247,6 +301,22 @@ public class AuthService {
             }
         }
         throw ApiException.conflict("slug_unavailable", "could not generate a unique link; try again");
+    }
+
+    /**
+     * When the server sets {@code ordaro.signup.code}, only people given the code can create a
+     * shop — a pilot server on the open internet should not collect strangers' organizations.
+     */
+    private void requireSignupCode(String offered) {
+        if (signupCode == null) {
+            return;
+        }
+        if (offered == null || offered.isBlank()) {
+            throw ApiException.forbidden("signup_code_required", "this server needs a sign-up code");
+        }
+        if (!MessageDigest.isEqual(signupCode, offered.trim().getBytes(StandardCharsets.UTF_8))) {
+            throw ApiException.forbidden("signup_code_invalid", "that sign-up code is not right");
+        }
     }
 
     private Account activeAccount(UUID accountId) {

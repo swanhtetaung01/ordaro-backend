@@ -31,8 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import app.ordaro.finance.ReceivableRepository;
 import app.ordaro.finance.Owed;
+import app.ordaro.org.Organization;
+import app.ordaro.org.OrganizationRepository;
 import app.ordaro.org.Phones;
 import app.ordaro.sales.PriceType;
+import app.ordaro.shared.tenant.TenantContext;
 import app.ordaro.shared.web.ApiException;
 
 /**
@@ -65,11 +68,14 @@ class CustomerController {
 
     private final CustomerRepository customers;
     private final ReceivableRepository receivables;
+    private final OrganizationRepository organizations;
     private final Clock clock;
 
-    CustomerController(CustomerRepository customers, ReceivableRepository receivables, Clock clock) {
+    CustomerController(CustomerRepository customers, ReceivableRepository receivables,
+            OrganizationRepository organizations, Clock clock) {
         this.customers = customers;
         this.receivables = receivables;
+        this.organizations = organizations;
         this.clock = clock;
     }
 
@@ -102,6 +108,10 @@ class CustomerController {
         Customer customer = new Customer(request.name().trim(),
                 request.type() != null ? request.type() : CustomerType.MEMBER,
                 request.defaultPriceType() != null ? request.defaultPriceType() : PriceType.RETAIL);
+        // the terms the owner chose for every new customer; anyone who sells may apply them
+        Organization organization = organizations.findById(TenantContext.requireOrganizationId()).orElseThrow();
+        customer.setCreditLimit(organization.getDefaultCreditLimit());
+        customer.setCreditTermDays(organization.getDefaultCreditTermDays());
         apply(customer, request, auth);
         return CustomerView.of(customers.save(customer), BigDecimal.ZERO);
     }
