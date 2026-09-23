@@ -12,9 +12,17 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-echo "== pulling the latest code"
-git -C .. pull --ff-only
-git -C "$WEB_DIR" pull --ff-only
+# always main, whatever a clone checked out: GitHub's default branch is not main everywhere
+update() {
+  git -C "$1" fetch -q origin main
+  git -C "$1" checkout -q main
+  git -C "$1" merge -q --ff-only origin/main
+  echo "   $(basename "$(cd "$1" && pwd)") @ $(git -C "$1" log --oneline -1)"
+}
+
+echo "== pulling the latest main of both repos"
+update ..
+update "$WEB_DIR"
 
 if docker compose ps --status running --services 2>/dev/null | grep -qx backend; then
   echo "== backing up the database before anything changes"

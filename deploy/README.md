@@ -107,8 +107,8 @@ On the server:
 
 ```bash
 mkdir -p ~/ordaro && cd ~/ordaro
-git clone https://github.com/swanhtetaung01/ordaro-backend.git
-git clone https://github.com/swanhtetaung01/ordaro-web.git
+git clone --branch main https://github.com/swanhtetaung01/ordaro-backend.git
+git clone --branch main https://github.com/swanhtetaung01/ordaro-web.git
 bash ordaro-backend/deploy/setup-server.sh
 exit
 ```
