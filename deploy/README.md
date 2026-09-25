@@ -33,8 +33,8 @@ EC2 → Network & Security → **Security Groups** → Create security group. Tw
 
 | Name | Inbound rules |
 |---|---|
-| `ordaro-web` | SSH, port 22, source **My IP** · HTTP, port 80, source Anywhere-IPv4 · HTTPS, port 443, source Anywhere-IPv4 |
-| `ordaro-db` | PostgreSQL, port 5432, source **Custom → the `ordaro-web` group** (start typing `sg-` and pick it) |
+| `trillopos-web` | SSH, port 22, source **My IP** · SSH, port 22, source **Custom → `com.amazonaws.ap-southeast-1.ec2-instance-connect`** (without it the browser terminal cannot connect) · HTTP, port 80, source Anywhere-IPv4 · HTTPS, port 443, source Anywhere-IPv4 |
+| `trillopos-db` | PostgreSQL, port 5432, source **Custom → the `trillopos-web` group** (start typing `sg-` and pick it) |
 
 Leave the outbound rules as they are. The database accepts connections only from the web server's
 group, never from the internet.
@@ -49,7 +49,7 @@ RDS → Databases → **Create database**:
 | Engine | PostgreSQL, the newest **17.x** |
 | Templates | Free tier if offered, otherwise Dev/Test |
 | Availability | Single-AZ DB instance |
-| DB instance identifier | `ordaro` |
+| DB instance identifier | `trillopos` |
 | Master username | `postgres` |
 | Credentials management | Self managed, **Auto generate password** |
 | Instance class | Burstable → **db.t4g.micro** |
@@ -57,10 +57,10 @@ RDS → Databases → **Create database**:
 | Compute resource | Don't connect to an EC2 compute resource |
 | VPC | Default VPC |
 | **Public access** | **No** |
-| VPC security group | Choose existing → **`ordaro-db`** (remove `default`) |
+| VPC security group | Choose existing → **`trillopos-db`** (remove `default`) |
 | Database authentication | Password authentication |
 | Monitoring | Performance Insights on (7 days, free); Enhanced Monitoring off |
-| Additional configuration → **Initial database name** | `ordaro` |
+| Additional configuration → **Initial database name** | `ordaro` (left empty? then answer `postgres` when step 6 asks for the database name) |
 | Backup retention | 7 days |
 | Encryption | on |
 | **Deletion protection** | **on** |
@@ -68,7 +68,7 @@ RDS → Databases → **Create database**:
 Create it. On the next screen click **View credential details** and **save the master password in
 a password manager**. AWS shows it only this once. Creation takes about 10 minutes. When the status
 is *Available*, open the database and copy the **Endpoint**, which looks like
-`ordaro.abc123xyz.ap-southeast-1.rds.amazonaws.com`.
+`trillopos.abc123xyz.ap-southeast-1.rds.amazonaws.com`.
 
 ## 3. The server (EC2)
 
@@ -76,40 +76,40 @@ EC2 → Instances → **Launch instances**:
 
 | Setting | Value |
 |---|---|
-| Name | `ordaro` |
+| Name | `trillopos` |
 | Image | **Ubuntu Server 24.04 LTS**, architecture **64-bit (Arm)** |
 | Instance type | **t4g.small** |
-| Key pair | Create new key pair → `ordaro-key`, RSA, `.pem` → it downloads; keep that file safe |
-| Network settings → Firewall | Select existing security group → **`ordaro-web`** |
+| Key pair | Create new key pair → `trillopos-key`, RSA, `.pem` → it downloads; keep that file safe |
+| Network settings → Firewall | Select existing security group → **`trillopos-web`** |
 | Storage | **20 GiB gp3** |
 
 Launch. Then give it a fixed address: EC2 → **Elastic IPs** → Allocate Elastic IP address →
-Allocate → select it → Actions → **Associate** → instance `ordaro` → Associate. Note the IP, for
+Allocate → select it → Actions → **Associate** → instance `trillopos` → Associate. Note the IP, for
 example `13.229.10.20`. Your address is then **`13-229-10-20.sslip.io`**.
 
 ## 4. Open a terminal on the server
 
-The easiest way: EC2 → Instances → select `ordaro` → **Connect** → *EC2 Instance Connect* →
+The easiest way: EC2 → Instances → select `trillopos` → **Connect** → *EC2 Instance Connect* →
 Connect. A terminal opens in the browser.
 
 Or from Windows PowerShell:
 
 ```powershell
-ssh -i C:\path\to\ordaro-key.pem ubuntu@13.229.10.20
+ssh -i C:\path\to\trillopos-key.pem ubuntu@13.229.10.20
 ```
 
 If it says the key's permissions are too open, run
-`icacls C:\path\to\ordaro-key.pem /inheritance:r /grant:r "$($env:USERNAME):R"` once, then retry.
+`icacls C:\path\to\trillopos-key.pem /inheritance:r /grant:r "$($env:USERNAME):R"` once, then retry.
 
 ## 5. Get the code and prepare the server (10 minutes)
 
 On the server:
 
 ```bash
-mkdir -p ~/ordaro && cd ~/ordaro
-git clone --branch main https://github.com/swanhtetaung01/ordaro-backend.git
-git clone --branch main https://github.com/swanhtetaung01/ordaro-web.git
-bash ordaro-backend/deploy/setup-server.sh
+mkdir -p ~/trillopos && cd ~/trillopos
+git clone --branch main https://github.com/swanhtetaung01/trillopos-backend.git
+git clone --branch main https://github.com/swanhtetaung01/trillopos-web.git
+bash trillopos-backend/deploy/setup-server.sh
 exit
 ```
 
@@ -118,7 +118,7 @@ Connect again, because Docker needs a fresh login to work without `sudo`.
 ## 6. Create the database roles (once)
 
 ```bash
-cd ~/ordaro/ordaro-backend/deploy
+cd ~/trillopos/trillopos-backend/deploy
 ./bootstrap-database.sh
 ```
 
@@ -159,7 +159,7 @@ crontab -e
 Choose nano if it asks, add this line at the end, then save:
 
 ```
-30 2 * * * $HOME/ordaro/ordaro-backend/deploy/backup.sh >> $HOME/ordaro-backups.log 2>&1
+30 2 * * * $HOME/trillopos/trillopos-backend/deploy/backup.sh >> $HOME/ordaro-backups.log 2>&1
 ```
 
 Every night at 02:30 Yangon time, a full copy of the database goes to `~/ordaro-backups`, and
@@ -169,7 +169,7 @@ minute of the last 7 days.
 ## 10. The acceptance check (5 minutes, before your sister signs up)
 
 ```bash
-cd ~/ordaro/ordaro-backend
+cd ~/trillopos/trillopos-backend
 SIGNUP_CODE=longyi-2026 BASE=http://127.0.0.1:8080 bash scripts/vertical-slice.sh
 ```
 
@@ -193,7 +193,7 @@ Give her the address and the sign-up code, and the shop guide (`docs/pilot-shop-
 
 ## Everyday operations
 
-All from `~/ordaro/ordaro-backend/deploy` on the server.
+All from `~/trillopos/trillopos-backend/deploy` on the server.
 
 | When | Do |
 |---|---|
@@ -216,13 +216,13 @@ message if the site goes down.
 - **The site does not open.** Run `docker compose ps`: all three should say *Up* (backend and web
   also *healthy*). If Caddy is up but the browser shows a certificate error, check
   `docker compose logs caddy`. Usually `ORDARO_DOMAIN` does not match the Elastic IP, or port 80
-  is not open in the `ordaro-web` security group.
+  is not open in the `trillopos-web` security group.
 - **The API does not start.** `docker compose logs --tail 200 backend`. A wrong password in `.env`
   or the database's security group are the usual causes.
 - **Undo a bad deploy.** `git -C .. log --oneline -5`, then `git -C .. checkout <previous id>` and
   `docker compose up -d --build`. Database changes are never rolled back, only fixed forward, so
   tell Claude what happened before doing this.
-- **Get data back.** First choice: RDS console → Databases → `ordaro` → Actions → **Restore to
+- **Get data back.** First choice: RDS console → Databases → `trillopos` → Actions → **Restore to
   point in time**. That creates a new database as it was at the minute you pick; point
   `ORDARO_DB_URL` in `.env` at its endpoint and run `./deploy.sh`. The nightly file backups
   restore with `pg_restore` (the restore was rehearsed on 2026-09-23).
@@ -231,13 +231,13 @@ message if the site goes down.
 
 - **Never** set the database to *Public access: Yes*, and never commit `deploy/.env`. It holds
   the database passwords, and git already ignores it.
-- The `ordaro-key.pem` file is the only way into the server besides the AWS console. Keep it
+- The `trillopos-key.pem` file is the only way into the server besides the AWS console. Keep it
   private.
 - **Both GitHub repositories are public**, so anyone can read the code. No passwords or keys are
   in it, but a business usually keeps its code private. To make them private: GitHub → each repo →
   Settings → Danger Zone → *Change visibility*. The server then needs read access to pull: create
   a fine-grained personal access token with *Contents: read-only* on the two repos, and run
-  `git -C ~/ordaro/ordaro-backend remote set-url origin https://<token>@github.com/swanhtetaung01/ordaro-backend.git`
-  (and the same for `ordaro-web`).
+  `git -C ~/trillopos/trillopos-backend remote set-url origin https://<token>@github.com/swanhtetaung01/trillopos-backend.git`
+  (and the same for `trillopos-web`).
 - A real domain later: point it at the Elastic IP (an A record), change `ORDARO_DOMAIN`, and run
   `./deploy.sh`. The certificate follows automatically.

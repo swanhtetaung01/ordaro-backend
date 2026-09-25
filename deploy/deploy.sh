@@ -5,7 +5,18 @@
 #   ./deploy.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-WEB_DIR="${ORDARO_WEB_DIR:-../../ordaro-web}"
+# the web app is cloned beside this repo: trillopos-web (ordaro-web in older clones)
+WEB_DIR="${ORDARO_WEB_DIR:-}"
+if [ -z "$WEB_DIR" ]; then
+  for candidate in ../../trillopos-web ../../ordaro-web; do
+    if [ -d "$candidate" ]; then WEB_DIR="$candidate"; break; fi
+  done
+fi
+if [ -z "$WEB_DIR" ]; then
+  echo "The web app is missing: clone trillopos-web beside trillopos-backend (see README.md step 5)"
+  exit 1
+fi
+export ORDARO_WEB_DIR="$WEB_DIR"
 
 if [ ! -f .env ]; then
   echo "deploy/.env is missing: run ./bootstrap-database.sh first (see README.md)"

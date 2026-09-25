@@ -31,7 +31,7 @@ services:
     logging: *logging
 
   web:
-    build: ${ORDARO_WEB_DIR:-../../ordaro-web}
+    build: ${ORDARO_WEB_DIR:-../../trillopos-web}
     image: ordaro-web:latest
     restart: unless-stopped
     environment:
