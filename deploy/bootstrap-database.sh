@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-read -rp "RDS endpoint (e.g. ordaro.xxxx.ap-southeast-1.rds.amazonaws.com): " HOST
+read -rp "RDS endpoint (e.g. trillopos.xxxx.ap-southeast-1.rds.amazonaws.com): " HOST
 PORT=5432
 if [[ "$HOST" == *:* ]]; then
   PORT=${HOST##*:}

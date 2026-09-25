@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time preparation of a fresh Ubuntu 24.04 server (the EC2 instance): Docker, a swap file so
 # the builds fit in 2 GB of memory, automatic security updates, and the shop's timezone for logs.
-# Run as the default `ubuntu` user:  bash ordaro/ordaro-backend/deploy/setup-server.sh
+# Run as the default `ubuntu` user:  bash trillopos/trillopos-backend/deploy/setup-server.sh
 set -euo pipefail
 
 echo "== packages"
