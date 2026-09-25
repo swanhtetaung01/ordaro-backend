@@ -4,7 +4,7 @@
 #   ./deploy.sh              pull both repos, back up the database, rebuild, restart
 #   docker compose ps        what is running
 #   docker compose logs -f   what it is saying
-name: ordaro
+name: trillopos
 
 x-logging: &logging
   driver: json-file
@@ -15,7 +15,7 @@ x-logging: &logging
 services:
   backend:
     build: ..
-    image: ordaro-backend:latest
+    image: trillopos-backend:latest
     restart: unless-stopped
     env_file: .env
     environment:
@@ -32,7 +32,7 @@ services:
 
   web:
     build: ${ORDARO_WEB_DIR:-../../trillopos-web}
-    image: ordaro-web:latest
+    image: trillopos-web:latest
     restart: unless-stopped
     environment:
       ORDARO_API_URL: http://backend:8080

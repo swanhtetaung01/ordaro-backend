@@ -5,10 +5,10 @@
 #   ./deploy.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-# the web app is cloned beside this repo: trillopos-web (ordaro-web in older clones)
+# the web app is cloned beside this repo, as trillopos-web
 WEB_DIR="${ORDARO_WEB_DIR:-}"
 if [ -z "$WEB_DIR" ]; then
-  for candidate in ../../trillopos-web ../../ordaro-web; do
+  for candidate in ../../trillopos-web; do
     if [ -d "$candidate" ]; then WEB_DIR="$candidate"; break; fi
   done
 fi

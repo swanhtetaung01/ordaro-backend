@@ -60,7 +60,7 @@ RDS → Databases → **Create database**:
 | VPC security group | Choose existing → **`trillopos-db`** (remove `default`) |
 | Database authentication | Password authentication |
 | Monitoring | Performance Insights on (7 days, free); Enhanced Monitoring off |
-| Additional configuration → **Initial database name** | `ordaro` (left empty? then answer `postgres` when step 6 asks for the database name) |
+| Additional configuration → **Initial database name** | leave empty: the app uses the default `postgres` database |
 | Backup retention | 7 days |
 | Encryption | on |
 | **Deletion protection** | **on** |
@@ -159,10 +159,10 @@ crontab -e
 Choose nano if it asks, add this line at the end, then save:
 
 ```
-30 2 * * * $HOME/trillopos/trillopos-backend/deploy/backup.sh >> $HOME/ordaro-backups.log 2>&1
+30 2 * * * $HOME/trillopos/trillopos-backend/deploy/backup.sh >> $HOME/trillopos-backups.log 2>&1
 ```
 
-Every night at 02:30 Yangon time, a full copy of the database goes to `~/ordaro-backups`, and
+Every night at 02:30 Yangon time, a full copy of the database goes to `~/trillopos-backups`, and
 copies older than 14 days are deleted. RDS separately keeps its own backups, which can restore any
 minute of the last 7 days.
 

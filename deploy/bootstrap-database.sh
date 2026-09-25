@@ -19,8 +19,8 @@ read -rp "Master username [postgres]: " MASTER
 MASTER=${MASTER:-postgres}
 read -rsp "Master password: " MASTER_PASSWORD
 echo
-read -rp "Database name [ordaro]: " DATABASE
-DATABASE=${DATABASE:-ordaro}
+read -rp "Database name [postgres]: " DATABASE
+DATABASE=${DATABASE:-postgres}
 SSLMODE=${ORDARO_BOOTSTRAP_SSLMODE:-require}
 
 OWNER_PASSWORD=$(openssl rand -hex 24)
