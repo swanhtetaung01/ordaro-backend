@@ -178,7 +178,8 @@ and *Other Shop*. Nobody else can see them.
 
 ## 11. Your sister's first steps
 
-Give her the address and the sign-up code, and the shop guide (`docs/pilot-shop-guide.md`). Then:
+Give her the address, the sign-up code, and the shop guide, which the web app serves at
+`https://<your domain>/my/guide` (Burmese) and `/en/guide` (English); no sign-in needed. Then:
 
 1. **Create a business**: her name, the shop's name, her phone (`09…` is fine), a password, and
    the sign-up code.
