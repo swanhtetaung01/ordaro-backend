@@ -1,11 +1,11 @@
-# ordaro-backend
+# trillopos-backend
 
 ## Read the vault before exploring the code
 
-Working memory for this project lives in the **`Ordaro-Vault`** repo, checked out beside this one:
+Working memory for this project lives in the **`TrilloPOS-Vault`** repo, checked out beside this one:
 
 ```
-../Ordaro-Vault/now.md
+../TrilloPOS-Vault/now.md
 ```
 
 **Read `now.md` first** — current HEADs, what just landed, open items, traps. Do not read
@@ -15,7 +15,7 @@ Write back as you go: a fact in `now.md` that stops being true is edited in plac
 ships, is decided, or breaks and is fixed is appended to `history.md`; long-term state changes go
 in `index.md`. `git pull` before writing to the vault. No secrets in the vault.
 
-The approved spec is `../docs/domain-model.md`. The company and product are **Ordaro**.
+The approved spec is `../docs/domain-model.md`. The company and product are **TrilloPOS**.
 
 ## Build
 

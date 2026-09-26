@@ -23,12 +23,6 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-# the settings were named ORDARO_… until 2026-09-26: rename an older .env in place, once
-if grep -q '^ORDARO_' .env; then
-  sed -i 's/^ORDARO_/TRILLOPOS_/' .env
-  echo "== renamed the settings in .env from ORDARO_ to TRILLOPOS_"
-fi
-
 # always main, whatever a clone checked out: GitHub's default branch is not main everywhere
 update() {
   git -C "$1" fetch -q origin main

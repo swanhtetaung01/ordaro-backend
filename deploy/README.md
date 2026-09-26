@@ -1,4 +1,4 @@
-# Putting Ordaro online for the pilot shop
+# Putting TrilloPOS online for the pilot shop
 
 One server (EC2) runs three containers: the API, the web app, and Caddy, which gets the HTTPS
 certificate by itself. The database is RDS PostgreSQL, reachable only from that server. Your
@@ -147,7 +147,7 @@ TRILLOPOS_SIGNUP_CODE=longyi-2026
 
 It builds everything, starts it, waits until the API is healthy, and ends with
 `== live at https://13-229-10-20.sslip.io`. Open that address on your phone. You should see the
-Ordaro sign-in page with a padlock in the address bar.
+TrilloPOS sign-in page with a padlock in the address bar.
 `https://13-229-10-20.sslip.io/api/health` should answer `{"status":"UP","backend":"UP"}`.
 
 ## 9. A backup every night

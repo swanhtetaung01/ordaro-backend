@@ -8,11 +8,11 @@
 		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>app.ordaro</groupId>
-	<artifactId>ordaro-backend</artifactId>
+	<groupId>app.trillopos</groupId>
+	<artifactId>trillopos-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>ordaro-backend</name>
-	<description>Ordaro backend API</description>
+	<name>trillopos-backend</name>
+	<description>TrilloPOS backend API</description>
 	<url/>
 	<licenses>
 		<license/>

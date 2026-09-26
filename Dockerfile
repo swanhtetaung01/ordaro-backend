@@ -10,16 +10,16 @@ COPY mvnw pom.xml ./
 # a Windows checkout can leave CRLF in the wrapper; the shell would then refuse it
 RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -q -B dependency:go-offline
 COPY src src
-RUN ./mvnw -q -B -DskipTests package && cp target/ordaro-backend-*.jar /app.jar
+RUN ./mvnw -q -B -DskipTests package && cp target/trillopos-backend-*.jar /app.jar
 
 FROM eclipse-temurin:25-jre
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --create-home ordaro \
+    && useradd --system --uid 10001 --create-home trillopos \
     && mkdir -p /data \
-    && chown ordaro /data
-USER ordaro
+    && chown trillopos /data
+USER trillopos
 WORKDIR /app
 COPY --from=build /app.jar app.jar
 # the heap follows the container's memory limit; an out-of-memory JVM exits and Docker restarts it
