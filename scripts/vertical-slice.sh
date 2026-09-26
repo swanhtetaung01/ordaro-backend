@@ -19,7 +19,10 @@ PASSWORD="correct horse battery"
 step=0
 say()  { printf '\n\033[1m%2d. %s\033[0m\n' "$((++step))" "$*"; }
 # j "d['x']" prints one field; whole-number decimals (10.0000) print as 10
-j()    { python -c "import json,sys; d=json.load(sys.stdin); v=$1; print(int(v) if isinstance(v,float) and v.is_integer() else v)"; }
+# Ubuntu ships python3 only; this Windows PC answers to python (its python3 is a store stub)
+PY=python3
+"$PY" -c "" 2>/dev/null || PY=python
+j()    { "$PY" -c "import json,sys; d=json.load(sys.stdin); v=$1; print(int(v) if isinstance(v,float) and v.is_integer() else v)"; }
 fail() { printf '\033[31mFAIL: %s\033[0m\n' "$*" >&2; exit 1; }
 expect() { [ "$1" == "$2" ] || fail "$3: expected $2, got $1"; printf '   ✓ %s = %s\n' "$3" "$2"; }
 
