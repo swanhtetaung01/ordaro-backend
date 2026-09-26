@@ -1,6 +1,6 @@
 -- V1 — build step 1: shared columns, org + catalog + identity.
 --
--- Runs as ordaro_owner in schema ordaro; both were created by db/bootstrap.sql (as postgres),
+-- Runs as trillopos_owner in schema trillopos; both were created by db/bootstrap.sql (as postgres),
 -- not here. Once applied, never edit this file: add V2.
 --
 -- Conventions (spec §1, §12):
@@ -14,8 +14,8 @@
 
 -- Everything created below is usable by the app role. Set first so it covers V1's own tables;
 -- flyway_schema_history already exists and stays owner-only.
-alter default privileges in schema ordaro grant select, insert, update, delete on tables to ordaro_app;
-alter default privileges in schema ordaro grant usage, select on sequences to ordaro_app;
+alter default privileges in schema trillopos grant select, insert, update, delete on tables to trillopos_app;
+alter default privileges in schema trillopos grant usage, select on sequences to trillopos_app;
 
 -- ─────────────────────────────────────────────────────────────── org
 

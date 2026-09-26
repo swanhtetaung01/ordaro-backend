@@ -27,7 +27,7 @@ OWNER_PASSWORD=$(openssl rand -hex 24)
 APP_PASSWORD=$(openssl rand -hex 24)
 DB_DIR="$(cd .. && pwd)/db"
 
-echo "== creating ordaro_owner, ordaro_app and the ordaro schema"
+echo "== creating trillopos_owner, trillopos_app and the trillopos schema"
 docker run --rm -i -e PGPASSWORD="$MASTER_PASSWORD" -v "$DB_DIR:/db:ro" postgres:17 \
   psql "host=$HOST port=$PORT dbname=$DATABASE user=$MASTER sslmode=$SSLMODE" \
   -v ON_ERROR_STOP=1 -v owner_password="$OWNER_PASSWORD" -v app_password="$APP_PASSWORD" \
@@ -44,9 +44,9 @@ set_value() {
   fi
 }
 set_value TRILLOPOS_DB_URL "jdbc:postgresql://$HOST:$PORT/$DATABASE?sslmode=$SSLMODE"
-set_value TRILLOPOS_OWNER_USER ordaro_owner
+set_value TRILLOPOS_OWNER_USER trillopos_owner
 set_value TRILLOPOS_OWNER_PASSWORD "$OWNER_PASSWORD"
-set_value TRILLOPOS_APP_USER ordaro_app
+set_value TRILLOPOS_APP_USER trillopos_app
 set_value TRILLOPOS_APP_PASSWORD "$APP_PASSWORD"
 
 echo

@@ -60,7 +60,7 @@ create table receivable (
     -- where the credit was given; a repayment may be taken anywhere
     location_id             uuid          not null,
     source_type             varchar(32)   not null,
-    -- the sale for SALE; null for MANUAL (a debt carried over from before Ordaro)
+    -- the sale for SALE; null for MANUAL (a debt carried over from before TrilloPOS)
     source_id               uuid,
     reference_number        varchar(40),
     original_amount         numeric(19,4) not null,

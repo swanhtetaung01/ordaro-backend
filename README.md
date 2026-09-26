@@ -1,7 +1,7 @@
-# ordaro-backend
+# trillopos-backend
 
-Multi-tenant POS and inventory API for Ordaro. Spring Boot 4.1 · Java 25 · Hibernate ORM 7.4 ·
-PostgreSQL · Flyway. Spec: `../docs/domain-model.md`. Working memory: `../Ordaro-Vault/`.
+Multi-tenant POS and inventory API for TrilloPOS. Spring Boot 4.1 · Java 25 · Hibernate ORM 7.4 ·
+PostgreSQL · Flyway. Spec: `../docs/domain-model.md`. Working memory: `../TrilloPOS-Vault/`.
 
 Build steps 1–2 are in place: accounts, organizations, locations (`STORE` · `WAREHOUSE`),
 memberships and invitations, token auth, catalog CRUD (step 1); the append-only stock ledger,
@@ -14,8 +14,8 @@ Two roles, created once by `db/bootstrap.sql` run as `postgres` (outside Flyway)
 
 | Role | Used by | Can |
 |---|---|---|
-| `ordaro_owner` | Flyway (`spring.flyway.*`) | owns every table in schema `ordaro` |
-| `ordaro_app` | the application pool (`spring.datasource.*`) | read/write rows; owns nothing, no `BYPASSRLS` |
+| `trillopos_owner` | Flyway (`spring.flyway.*`) | owns every table in schema `trillopos` |
+| `trillopos_app` | the application pool (`spring.datasource.*`) | read/write rows; owns nothing, no `BYPASSRLS` |
 
 Use a session-mode connection (port 5432) for both — never the transaction pooler (6543).
 

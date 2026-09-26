@@ -18,7 +18,7 @@ create table payable (
     -- the location that received the goods
     location_id             uuid          not null,
     source_type             varchar(32)   not null,
-    -- the stock document for STOCK_DOCUMENT; null for MANUAL (a debt from before Ordaro)
+    -- the stock document for STOCK_DOCUMENT; null for MANUAL (a debt from before TrilloPOS)
     source_id               uuid,
     reference_number        varchar(40),
     original_amount         numeric(19,4) not null,

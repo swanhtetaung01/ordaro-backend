@@ -6,7 +6,7 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: ordaro
+      POSTGRES_DB: trillopos
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       TRILLOPOS_OWNER_PASSWORD: ${TRILLOPOS_OWNER_PASSWORD:?set TRILLOPOS_OWNER_PASSWORD in .env}
@@ -14,8 +14,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./db/bootstrap.sql:/ordaro/bootstrap.sql:ro
-      - ./db/docker-init.sh:/docker-entrypoint-initdb.d/10-ordaro-bootstrap.sh:ro
-      - ordaro-pg:/var/lib/postgresql/data
+      - ./db/bootstrap.sql:/trillopos/bootstrap.sql:ro
+      - ./db/docker-init.sh:/docker-entrypoint-initdb.d/10-trillopos-bootstrap.sh:ro
+      - trillopos-pg:/var/lib/postgresql/data
 volumes:
-  ordaro-pg:
+  trillopos-pg:

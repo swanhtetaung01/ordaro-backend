@@ -3,7 +3,7 @@
 --
 -- Same conventions as V1: composite (organization_id, x_id) references between tenant tables,
 -- enum columns VARCHAR(32) + CHECK <table>_<column>_check, quantities and money NUMERIC(19,4).
--- Default privileges from V1 already grant ordaro_app on every table created here.
+-- Default privileges from V1 already grant trillopos_app on every table created here.
 
 -- ─────────────────────────────────────────────────────────────── document numbers
 
@@ -171,7 +171,7 @@ create index stock_movement_ledger_idx on stock_movement (organization_id, locat
 create index stock_movement_reference_idx on stock_movement (reference_type, reference_id);
 
 -- Belt and braces: the app role may only insert and read; a trigger stops the owner too.
-revoke update, delete, truncate on stock_movement from ordaro_app;
+revoke update, delete, truncate on stock_movement from trillopos_app;
 
 create function stock_movement_append_only() returns trigger
     language plpgsql as $$

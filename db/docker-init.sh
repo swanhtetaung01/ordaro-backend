@@ -5,4 +5,4 @@ set -e
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
      -v owner_password="$TRILLOPOS_OWNER_PASSWORD" \
      -v app_password="$TRILLOPOS_APP_PASSWORD" \
-     -f /ordaro/bootstrap.sql
+     -f /trillopos/bootstrap.sql
