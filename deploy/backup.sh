@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 value() { sed -n "s/^$1=//p" .env | tail -1; }
-URL=$(value ORDARO_DB_URL)                  # jdbc:postgresql://host:5432/postgres?sslmode=require
+URL=$(value TRILLOPOS_DB_URL)                  # jdbc:postgresql://host:5432/postgres?sslmode=require
 ADDRESS=${URL#jdbc:postgresql://}
 ADDRESS=${ADDRESS%%/*}
 HOST=${ADDRESS%%:*}
@@ -19,13 +19,13 @@ DATABASE=${DATABASE%%\?*}
 SSLMODE=require
 [[ "$URL" == *sslmode=* ]] && SSLMODE=$(echo "$URL" | sed -n 's/.*sslmode=\([a-z-]*\).*/\1/p')
 
-DIR="${ORDARO_BACKUP_DIR:-$HOME/trillopos-backups}"
+DIR="${TRILLOPOS_BACKUP_DIR:-$HOME/trillopos-backups}"
 mkdir -p "$DIR"
 FILE="trillopos-$(date +%Y%m%d-%H%M%S).dump"
 
 # as the owner: it owns every table, and row-level security does not apply to a table's owner
-docker run --rm -e PGPASSWORD="$(value ORDARO_OWNER_PASSWORD)" -v "$DIR:/backup" postgres:17 \
-  pg_dump "host=$HOST port=$PORT dbname=$DATABASE user=$(value ORDARO_OWNER_USER) sslmode=$SSLMODE" \
+docker run --rm -e PGPASSWORD="$(value TRILLOPOS_OWNER_PASSWORD)" -v "$DIR:/backup" postgres:17 \
+  pg_dump "host=$HOST port=$PORT dbname=$DATABASE user=$(value TRILLOPOS_OWNER_USER) sslmode=$SSLMODE" \
   --format=custom --file="/backup/$FILE"
 
 find "$DIR" -name 'trillopos-*.dump' -mtime +14 -delete

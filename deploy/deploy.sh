@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 # the web app is cloned beside this repo, as trillopos-web
-WEB_DIR="${ORDARO_WEB_DIR:-}"
+WEB_DIR="${TRILLOPOS_WEB_DIR:-}"
 if [ -z "$WEB_DIR" ]; then
   for candidate in ../../trillopos-web; do
     if [ -d "$candidate" ]; then WEB_DIR="$candidate"; break; fi
@@ -16,11 +16,17 @@ if [ -z "$WEB_DIR" ]; then
   echo "The web app is missing: clone trillopos-web beside trillopos-backend (see README.md step 5)"
   exit 1
 fi
-export ORDARO_WEB_DIR="$WEB_DIR"
+export TRILLOPOS_WEB_DIR="$WEB_DIR"
 
 if [ ! -f .env ]; then
   echo "deploy/.env is missing: run ./bootstrap-database.sh first (see README.md)"
   exit 1
+fi
+
+# the settings were named ORDARO_… until 2026-09-26: rename an older .env in place, once
+if grep -q '^ORDARO_' .env; then
+  sed -i 's/^ORDARO_/TRILLOPOS_/' .env
+  echo "== renamed the settings in .env from ORDARO_ to TRILLOPOS_"
 fi
 
 # always main, whatever a clone checked out: GitHub's default branch is not main everywhere
@@ -61,4 +67,4 @@ done
 
 docker compose ps
 docker image prune -f >/dev/null
-echo "== live at https://$(sed -n 's/^ORDARO_DOMAIN=//p' .env | tail -1)"
+echo "== live at https://$(sed -n 's/^TRILLOPOS_DOMAIN=//p' .env | tail -1)"

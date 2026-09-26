@@ -20,8 +20,8 @@ services:
     env_file: .env
     environment:
       # created on the first start, then kept: a deploy logs nobody out
-      ORDARO_JWT_KEYS_FILE: /data/jwt-keys.json
-      ORDARO_OPENAPI: "false"
+      TRILLOPOS_JWT_KEYS_FILE: /data/jwt-keys.json
+      TRILLOPOS_OPENAPI: "false"
     volumes:
       - backend-data:/data
     # the server itself only (admin commands, the slice); never the internet
@@ -31,11 +31,11 @@ services:
     logging: *logging
 
   web:
-    build: ${ORDARO_WEB_DIR:-../../trillopos-web}
+    build: ${TRILLOPOS_WEB_DIR:-../../trillopos-web}
     image: trillopos-web:latest
     restart: unless-stopped
     environment:
-      ORDARO_API_URL: http://backend:8080
+      TRILLOPOS_API_URL: http://backend:8080
     depends_on:
       backend:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
-      ORDARO_DOMAIN: ${ORDARO_DOMAIN:?set ORDARO_DOMAIN in deploy/.env}
+      TRILLOPOS_DOMAIN: ${TRILLOPOS_DOMAIN:?set TRILLOPOS_DOMAIN in deploy/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
