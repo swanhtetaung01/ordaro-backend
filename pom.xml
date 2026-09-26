@@ -137,6 +137,13 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<!-- ./mvnw spring-boot:run reads the local .env itself, from any shell. Real environment
+				     variables still win; tests and the packaged jar never read the file. -->
+				<configuration>
+					<arguments>
+						<argument>--spring.config.import=optional:file:.env[.properties]</argument>
+					</arguments>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

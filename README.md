@@ -19,8 +19,29 @@ Two roles, created once by `db/bootstrap.sql` run as `postgres` (outside Flyway)
 
 Use a session-mode connection (port 5432) for both — never the transaction pooler (6543).
 
-Local database with Docker: `cp .env.example .env`, fill in the passwords, `docker compose up -d`.
-Seed a demo shop: run with `--spring.profiles.active=seed` (phone `+959000000001`).
+## Run locally
+
+Needs Docker Desktop and Java 25. Once: `cp .env.example .env`, then fill in the passwords.
+
+```powershell
+docker compose up -d          # PostgreSQL 17 on localhost:5432; the bootstrap runs on a new volume
+.\mvnw.cmd spring-boot:run    # API on http://localhost:8080 (Git Bash: ./mvnw spring-boot:run)
+```
+
+`spring-boot:run` reads `.env` itself (configured in `pom.xml`), so no shell has to load it first;
+real environment variables still win, and tests and the jar never read it. Then start the web app
+(`npm run dev` in `trillopos-web`) and open http://localhost:3000.
+
+Local accounts live only in the Docker database — a production account does not exist here — and
+sign-up needs no code, because `TRILLOPOS_SIGNUP_CODE` is blank. For a ready-made shop, start once
+with the demo seed, then sign in as `09000000001` / `demo-password` (Shwe Demo Shop, three products
+with stock). In PowerShell the quotes are required:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=seed"
+```
+
+`docker compose down -v` wipes the local database.
 
 ## Tests
 
