@@ -5,7 +5,7 @@
 #   plus: login → token → request; a wrong-tenant request; a PIN register session.
 #
 # Usage: BASE=http://localhost:8080 scripts/vertical-slice.sh
-#        (a server with ORDARO_SIGNUP_CODE set: SIGNUP_CODE=that-code BASE=… scripts/vertical-slice.sh)
+#        (a server with TRILLOPOS_SIGNUP_CODE set: SIGNUP_CODE=that-code BASE=… scripts/vertical-slice.sh)
 # Needs curl and python3 (for JSON field extraction; no jq dependency). Every step asserts its
 # HTTP status and the values that matter; the script exits non-zero on the first failure.
 set -euo pipefail

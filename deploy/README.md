@@ -135,8 +135,8 @@ nano .env
 Change two lines, then save with Ctrl+O, Enter, and exit with Ctrl+X:
 
 ```
-ORDARO_DOMAIN=13-229-10-20.sslip.io
-ORDARO_SIGNUP_CODE=longyi-2026
+TRILLOPOS_DOMAIN=13-229-10-20.sslip.io
+TRILLOPOS_SIGNUP_CODE=longyi-2026
 ```
 
 ## 8. Start it (5–10 minutes the first time)
@@ -215,7 +215,7 @@ message if the site goes down.
 
 - **The site does not open.** Run `docker compose ps`: all three should say *Up* (backend and web
   also *healthy*). If Caddy is up but the browser shows a certificate error, check
-  `docker compose logs caddy`. Usually `ORDARO_DOMAIN` does not match the Elastic IP, or port 80
+  `docker compose logs caddy`. Usually `TRILLOPOS_DOMAIN` does not match the Elastic IP, or port 80
   is not open in the `trillopos-web` security group.
 - **The API does not start.** `docker compose logs --tail 200 backend`. A wrong password in `.env`
   or the database's security group are the usual causes.
@@ -224,7 +224,7 @@ message if the site goes down.
   tell Claude what happened before doing this.
 - **Get data back.** First choice: RDS console → Databases → `trillopos` → Actions → **Restore to
   point in time**. That creates a new database as it was at the minute you pick; point
-  `ORDARO_DB_URL` in `.env` at its endpoint and run `./deploy.sh`. The nightly file backups
+  `TRILLOPOS_DB_URL` in `.env` at its endpoint and run `./deploy.sh`. The nightly file backups
   restore with `pg_restore` (the restore was rehearsed on 2026-09-23).
 
 ## Keep in mind
@@ -239,5 +239,5 @@ message if the site goes down.
   a fine-grained personal access token with *Contents: read-only* on the two repos, and run
   `git -C ~/trillopos/trillopos-backend remote set-url origin https://<token>@github.com/swanhtetaung01/trillopos-backend.git`
   (and the same for `trillopos-web`).
-- A real domain later: point it at the Elastic IP (an A record), change `ORDARO_DOMAIN`, and run
+- A real domain later: point it at the Elastic IP (an A record), change `TRILLOPOS_DOMAIN`, and run
   `./deploy.sh`. The certificate follows automatically.

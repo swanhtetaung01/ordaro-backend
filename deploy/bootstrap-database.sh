@@ -21,7 +21,7 @@ read -rsp "Master password: " MASTER_PASSWORD
 echo
 read -rp "Database name [postgres]: " DATABASE
 DATABASE=${DATABASE:-postgres}
-SSLMODE=${ORDARO_BOOTSTRAP_SSLMODE:-require}
+SSLMODE=${TRILLOPOS_BOOTSTRAP_SSLMODE:-require}
 
 OWNER_PASSWORD=$(openssl rand -hex 24)
 APP_PASSWORD=$(openssl rand -hex 24)
@@ -43,12 +43,12 @@ set_value() {
     echo "$1=$2" >> .env
   fi
 }
-set_value ORDARO_DB_URL "jdbc:postgresql://$HOST:$PORT/$DATABASE?sslmode=$SSLMODE"
-set_value ORDARO_OWNER_USER ordaro_owner
-set_value ORDARO_OWNER_PASSWORD "$OWNER_PASSWORD"
-set_value ORDARO_APP_USER ordaro_app
-set_value ORDARO_APP_PASSWORD "$APP_PASSWORD"
+set_value TRILLOPOS_DB_URL "jdbc:postgresql://$HOST:$PORT/$DATABASE?sslmode=$SSLMODE"
+set_value TRILLOPOS_OWNER_USER ordaro_owner
+set_value TRILLOPOS_OWNER_PASSWORD "$OWNER_PASSWORD"
+set_value TRILLOPOS_APP_USER ordaro_app
+set_value TRILLOPOS_APP_PASSWORD "$APP_PASSWORD"
 
 echo
 echo "Done. The database has its roles; deploy/.env has their passwords."
-echo "Now set ORDARO_DOMAIN and ORDARO_SIGNUP_CODE in deploy/.env, then run ./deploy.sh"
+echo "Now set TRILLOPOS_DOMAIN and TRILLOPOS_SIGNUP_CODE in deploy/.env, then run ./deploy.sh"

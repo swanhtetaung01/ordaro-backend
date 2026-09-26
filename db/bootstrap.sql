@@ -1,7 +1,7 @@
 -- Ordaro database bootstrap — run ONCE per database, as `postgres`, outside Flyway.
 --
 --   psql "$ADMIN_URL" -v ON_ERROR_STOP=1 \
---        -v owner_password="$ORDARO_OWNER_PASSWORD" -v app_password="$ORDARO_APP_PASSWORD" \
+--        -v owner_password="$TRILLOPOS_OWNER_PASSWORD" -v app_password="$TRILLOPOS_APP_PASSWORD" \
 --        -f db/bootstrap.sql
 --
 -- On Supabase use the session-mode endpoint (port 5432), never the transaction pooler (6543).
